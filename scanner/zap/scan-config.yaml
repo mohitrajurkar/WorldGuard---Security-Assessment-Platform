@@ -1,0 +1,28 @@
+zapConfig:
+  name: "World Monitor Dynamic Security Profile"
+  version: "1.0.0"
+  targetHost: "https://worldmonitor.app"
+  activeScan:
+    maxDepth: 4
+    threadCount: 5
+    policies:
+      - id: "cross-site-scripting"
+        enabled: true
+        threshold: "MEDIUM"
+      - id: "cors-misconfiguration"
+        enabled: true
+        threshold: "LOW"
+      - id: "information-disclosure"
+        enabled: true
+        threshold: "LOW"
+      - id: "security-headers"
+        enabled: true
+        threshold: "LOW"
+      - id: "server-side-request-forgery"
+        enabled: true
+        threshold: "HIGH"
+  passiveScan:
+    maxAlertsPerRule: 10
+    scanOnlyInScope: true
+  headers:
+    customUserAgent: "WM-Security-Assessment-Bot/1.0 (SIH26163)"

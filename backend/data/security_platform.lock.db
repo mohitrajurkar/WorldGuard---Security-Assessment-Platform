@@ -1,0 +1,6 @@
+#FileLock
+#Mon Sep 14 18:56:39 IST 2026
+hostName=Lenovo
+id=1a0a01922ba6dbc1462c54f8793ea356f9a1f83056f
+method=file
+server=192.168.1.7\:60996

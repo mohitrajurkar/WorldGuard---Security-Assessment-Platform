@@ -1,0 +1,49 @@
+{
+  "name": "World Monitor API Security Assessment Suite",
+  "version": "1.0",
+  "endpoints": [
+    {
+      "path": "/api/version",
+      "method": "GET",
+      "category": "Information Disclosure",
+      "description": "Examines software build metadata and commit hashes",
+      "risk": "Attackers can map outdated dependencies or vulnerable commit revisions."
+    },
+    {
+      "path": "/api/health",
+      "method": "GET",
+      "category": "Information Disclosure",
+      "description": "Checks health check response for sensitive internal service statuses",
+      "risk": "May leak internal provider URLs and Redis connection state."
+    },
+    {
+      "path": "/api/seed-contract-probe",
+      "method": "GET",
+      "category": "Exposed Debug Probe",
+      "description": "Inspects contract probe endpoint intended for diagnostic testing",
+      "risk": "Bypasses normal authentication barriers."
+    },
+    {
+      "path": "/api/feed",
+      "method": "GET",
+      "category": "Data Injection & Rate Limiting",
+      "description": "Tests news and intelligence feed gateway for rate limiting and parameter injection",
+      "risk": "Potential Upstash Redis quota exhaustion or caching poisoning."
+    },
+    {
+      "path": "/api/search",
+      "method": "POST",
+      "category": "Input Validation & Injection",
+      "description": "Tests search query handler against SQLi/NoSQLi/XSS inputs",
+      "risk": "Untrusted queries passed to upstream providers without validation."
+    }
+  ],
+  "checks": [
+    "MISSING_SECURITY_HEADERS",
+    "PERMISSIVE_CORS",
+    "UNAUTHENTICATED_ENDPOINT_ACCESS",
+    "RATE_LIMIT_BYPASS_SPOOFED_IP",
+    "HTTP_VERB_TAMPERING",
+    "ERROR_STACK_DISCLOSURE"
+  ]
+}

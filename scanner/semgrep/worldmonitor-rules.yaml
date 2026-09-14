@@ -1,0 +1,72 @@
+rules:
+  - id: wm-hardcoded-api-secret
+    languages: [typescript, javascript]
+    message: "Potential hardcoded secret or API credential found in client-side code"
+    severity: ERROR
+    metadata:
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+      cvss: 7.5
+      impact: "Exposure of API credentials allows unauthorized access to backend cloud services."
+      remediation: "Move secrets to Vercel environment variables or Convex server-side secrets."
+    pattern-regex: '(?i)(RELAY_SHARED_SECRET|UPSTASH_REDIS_REST_TOKEN|CONVEX_DEPLOYMENT_KEY|ADMIN_TOKEN)\s*[:=]\s*["''][a-zA-Z0-9_\-\.]{12,}["'']'
+
+  - id: wm-unsafe-innerhtml-xss
+    languages: [typescript, javascript]
+    message: "Direct innerHTML assignment with unvalidated upstream data"
+    severity: WARNING
+    metadata:
+      cwe: "CWE-79: Cross-site Scripting (XSS)"
+      cvss: 6.1
+      impact: "Malicious payloads in news feeds or event streams can execute arbitrary JavaScript in the victim's session."
+      remediation: "Use DOMPurify.sanitize() or safe DOM manipulation methods like textContent."
+    patterns:
+      - pattern: '$EL.innerHTML = $DATA'
+      - pattern-not: '$EL.innerHTML = DOMPurify.sanitize(...) '
+
+  - id: wm-eval-dynamic-execution
+    languages: [typescript, javascript]
+    message: "Use of eval() or dynamic function constructor"
+    severity: ERROR
+    metadata:
+      cwe: "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"
+      cvss: 8.8
+      impact: "Execution of untrusted code leads to full client session compromise."
+      remediation: "Replace eval with structured JSON parsing or mathematical expression parser."
+    pattern-either:
+      - pattern: 'eval($CODE)'
+      - pattern: 'new Function($CODE)'
+
+  - id: wm-insecure-postmessage
+    languages: [typescript, javascript]
+    message: "postMessage called with wildcard '*' targetOrigin"
+    severity: WARNING
+    metadata:
+      cwe: "CWE-345: Insufficient Verification of Data Authenticity"
+      cvss: 5.3
+      impact: "Untrusted frames or windows could intercept sensitive telemetry or state."
+      remediation: "Specify explicit target origin instead of '*'."
+    pattern: 'window.postMessage($MSG, "*")'
+
+  - id: wm-unrestricted-cors-wildcard
+    languages: [typescript, javascript]
+    message: "Overly permissive CORS allowlist regex matching Vercel preview URLs"
+    severity: WARNING
+    metadata:
+      cwe: "CWE-942: Permissive Cross-Domain Policy"
+      cvss: 5.7
+      impact: "Attackers can create arbitrary vercel.app deployments that pass origin checks."
+      remediation: "Pin CORS origins to exact production domains and explicitly registered staging environments."
+    pattern-regex: 'https:\/\/[a-zA-Z0-9_\-]+\.vercel\.app'
+
+  - id: wm-bot-ua-regex-bypass
+    languages: [typescript, javascript]
+    message: "User-Agent based bot filtering easily bypassed by header spoofing"
+    severity: INFO
+    metadata:
+      cwe: "CWE-290: Authentication Bypass by Spoofing"
+      cvss: 4.3
+      impact: "Automated scraping bots or attackers can circumvent middleware filtering."
+      remediation: "Implement cryptographic challenge-response (e.g. Cloudflare Turnstile) or behavioral rate limiting."
+    patterns:
+      - pattern-inside: 'export function middleware(...) { ... }'
+      - pattern-regex: '(?i)bot|crawl|spider|slurp'
