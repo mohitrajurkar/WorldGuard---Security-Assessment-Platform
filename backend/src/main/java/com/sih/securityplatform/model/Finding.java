@@ -21,37 +21,48 @@ public class Finding {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Severity severity;
+    private Severity severity = Severity.MEDIUM;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private FindingCategory category;
+    private FindingCategory category = FindingCategory.CONFIGURATION;
 
-    private String source; // "SAST / Semgrep", "DAST / ZAP", "API Security Engine"
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private FindingStatus status = FindingStatus.POTENTIAL;
+
+    private String source; // "Semgrep", "OWASP ZAP", "API Scanner", "LeakIX"
     private String endpoint;
     private String filePath;
     private Integer lineNumber;
 
-    @Lob
-    @Column(length = 8000)
+    @Column(columnDefinition = "TEXT")
+    private String whatIsTheIssue;
+
+    @Column(columnDefinition = "TEXT")
+    private String whyDoesItMatter;
+
+    @Column(columnDefinition = "TEXT")
     private String description;
 
-    @Lob
-    @Column(length = 8000)
+    @Column(columnDefinition = "TEXT")
     private String impact;
 
-    @Lob
-    @Column(length = 8000)
+    @Column(columnDefinition = "TEXT")
     private String evidence;
 
-    @Lob
-    @Column(length = 8000)
+    @Column(columnDefinition = "TEXT")
     private String recommendation;
+
+    @Column(columnDefinition = "TEXT")
+    private String reproductionSteps;
+
+    @Column(columnDefinition = "TEXT")
+    private String rawTechnicalDetails;
 
     private String cwe;
     private Double cvssScore;
     private String fingerprint;
-    private String status = "OPEN"; // OPEN, ACKNOWLEDGED, RESOLVED, FALSE_POSITIVE
     private Integer remediationTimeMinutes = 30;
 
     public Finding() {}
@@ -100,6 +111,24 @@ public class Finding {
         this.category = category;
     }
 
+    public FindingStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(FindingStatus status) {
+        this.status = status;
+    }
+
+    public void setStatus(String statusStr) {
+        if (statusStr != null) {
+            try {
+                this.status = FindingStatus.valueOf(statusStr.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                this.status = FindingStatus.NEEDS_REVIEW;
+            }
+        }
+    }
+
     public String getSource() {
         return source;
     }
@@ -130,6 +159,38 @@ public class Finding {
 
     public void setLineNumber(Integer lineNumber) {
         this.lineNumber = lineNumber;
+    }
+
+    public String getAffectedComponent() {
+        if (endpoint != null && !endpoint.isBlank()) {
+            return endpoint;
+        }
+        if (filePath != null && !filePath.isBlank()) {
+            return lineNumber != null ? filePath + ":" + lineNumber : filePath;
+        }
+        return "Application Core";
+    }
+
+    public String getWhatIsTheIssue() {
+        if (whatIsTheIssue != null && !whatIsTheIssue.isBlank()) {
+            return whatIsTheIssue;
+        }
+        return description;
+    }
+
+    public void setWhatIsTheIssue(String whatIsTheIssue) {
+        this.whatIsTheIssue = whatIsTheIssue;
+    }
+
+    public String getWhyDoesItMatter() {
+        if (whyDoesItMatter != null && !whyDoesItMatter.isBlank()) {
+            return whyDoesItMatter;
+        }
+        return impact;
+    }
+
+    public void setWhyDoesItMatter(String whyDoesItMatter) {
+        this.whyDoesItMatter = whyDoesItMatter;
     }
 
     public String getDescription() {
@@ -164,6 +225,22 @@ public class Finding {
         this.recommendation = recommendation;
     }
 
+    public String getReproductionSteps() {
+        return reproductionSteps;
+    }
+
+    public void setReproductionSteps(String reproductionSteps) {
+        this.reproductionSteps = reproductionSteps;
+    }
+
+    public String getRawTechnicalDetails() {
+        return rawTechnicalDetails;
+    }
+
+    public void setRawTechnicalDetails(String rawTechnicalDetails) {
+        this.rawTechnicalDetails = rawTechnicalDetails;
+    }
+
     public String getCwe() {
         return cwe;
     }
@@ -186,14 +263,6 @@ public class Finding {
 
     public void setFingerprint(String fingerprint) {
         this.fingerprint = fingerprint;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
     }
 
     public Integer getRemediationTimeMinutes() {

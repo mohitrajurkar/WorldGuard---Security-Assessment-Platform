@@ -5,67 +5,61 @@ interface Props {
   size?: number;
 }
 
-export const SecurityGauge: React.FC<Props> = ({ score, size = 160 }) => {
-  const strokeWidth = 10;
-  const radius = (size - strokeWidth) / 2;
+export const SecurityGauge: React.FC<Props> = ({ score, size = 140 }) => {
+  const radius = (size - 24) / 2;
   const circumference = 2 * Math.PI * radius;
-  // Use 240-degree arc
-  const arcLength = circumference * 0.75;
-  const strokeDashoffset = arcLength - (arcLength * Math.min(100, Math.max(0, score))) / 100;
+  const clampedScore = Math.max(0, Math.min(100, score));
+  const strokeDashoffset = circumference - (clampedScore / 100) * circumference;
 
-  const getColor = () => {
-    if (score >= 80) return '#10b981'; // Emerald
-    if (score >= 60) return '#f59e0b'; // Amber
-    return '#f43f5e'; // Coral
+  const getColor = (s: number) => {
+    if (s === 0) return 'var(--border-medium)';
+    if (s >= 80) return 'var(--success-color)';
+    if (s >= 60) return 'var(--med-color)';
+    if (s >= 40) return 'var(--high-color)';
+    return 'var(--crit-color)';
   };
 
-  const getLabel = () => {
-    if (score >= 80) return 'Healthy';
-    if (score >= 60) return 'Review Needed';
-    return 'Action Needed';
+  const getLabel = (s: number) => {
+    if (s === 0) return 'UNASSESSED';
+    if (s >= 80) return 'HEALTHY';
+    if (s >= 60) return 'MODERATE';
+    if (s >= 40) return 'AT RISK';
+    return 'CRITICAL';
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative', width: size, height: size }}>
-      <svg
-        width={size}
-        height={size}
-        style={{ transform: 'rotate(135deg)', overflow: 'visible' }}
-      >
-        {/* Subtle background track */}
+    <div style={{ position: 'relative', width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        {/* Background Track */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          fill="none"
-          stroke="rgba(255, 255, 255, 0.07)"
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${arcLength} ${circumference}`}
-          strokeLinecap="round"
+          stroke="var(--bg-subtle)"
+          strokeWidth="10"
+          fill="transparent"
         />
-        {/* Animated clean score line */}
+        {/* Active Progress */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          fill="none"
-          stroke={getColor()}
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${arcLength} ${circumference}`}
+          stroke={getColor(score)}
+          strokeWidth="10"
+          strokeDasharray={circumference}
           strokeDashoffset={strokeDashoffset}
           strokeLinecap="round"
-          style={{
-            transition: 'stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1)'
-          }}
+          fill="transparent"
+          style={{ transition: 'stroke-dashoffset 0.8s ease, stroke 0.4s ease' }}
         />
       </svg>
-      <div style={{ position: 'absolute', top: '48%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
-        <div style={{ fontSize: '2.2rem', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1 }}>
+      <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+        <span style={{ fontSize: size * 0.28, fontWeight: 800, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', lineHeight: 1 }}>
           {score}
-        </div>
-        <div style={{ fontSize: '0.72rem', color: getColor(), fontWeight: 600, marginTop: '4px', letterSpacing: '0.02em' }}>
-          {getLabel()}
-        </div>
+        </span>
+        <span style={{ fontSize: size * 0.085, fontWeight: 700, color: getColor(score), letterSpacing: '0.08em', marginTop: '4px' }}>
+          {getLabel(score)}
+        </span>
       </div>
     </div>
   );

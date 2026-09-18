@@ -1,167 +1,239 @@
 import React, { useState } from 'react';
 import { api } from '../services/api';
-import { 
-  ShieldCheck, 
-  Code2, 
-  Globe, 
-  Terminal, 
-  Layers, 
-  Play, 
-  CheckCircle2 
-} from 'lucide-react';
+import { ShieldCheck, Play, AlertCircle, Info } from 'lucide-react';
 
 interface Props {
   onNavigate: (tab: string, scanId?: number) => void;
 }
 
 export const NewScan: React.FC<Props> = ({ onNavigate }) => {
+  const [targetUrl, setTargetUrl] = useState('http://localhost:3000');
   const [scanType, setScanType] = useState('COMPLETE');
-  const [targetUrl, setTargetUrl] = useState('https://worldmonitor.app');
-  const [sourcePath, setSourcePath] = useState('github.com/koala73/worldmonitor');
+  const [sourcePath, setSourcePath] = useState('D:\\SIH World monitor');
+
+  // Scanner options
+  const [enableSemgrep, setEnableSemgrep] = useState(true);
+  const [enableApiSecurity, setEnableApiSecurity] = useState(true);
+  const [enableZap, setEnableZap] = useState(true);
+  const [enableLeakix, setEnableLeakix] = useState(false);
+  const [authorizedDomain, setAuthorizedDomain] = useState('worldmonitor.app');
+
+  // Authorization confirmation
+  const [authorizedConfirmation, setAuthorizedConfirmation] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!authorizedConfirmation) {
+      alert('You must confirm authorization before initiating a security assessment.');
+      return;
+    }
+
     setLoading(true);
     try {
       const scan = await api.createScan({
         scanType,
         targetUrl,
         sourcePath,
+        enableSemgrep,
+        enableApiSecurity,
+        enableZap,
+        enableLeakix,
+        authorizedDomain: enableLeakix ? authorizedDomain : undefined,
+        authorizedConfirmation: true,
         isDemo: false
       });
-      onNavigate('scan-detail', scan.id);
-    } catch (err) {
-      alert('Error launching scan: ' + err);
+      onNavigate('scans', scan.id);
+    } catch (err: any) {
+      alert('Error launching assessment: ' + err.message);
       setLoading(false);
     }
   };
 
-  const modes = [
-    {
-      id: 'COMPLETE',
-      title: 'Full Multi-Engine Security Scan',
-      desc: 'Orchestrates Static Source Code Analysis, DAST Dynamic Web Crawling, and Edge API Probing sequentially.',
-      icon: <Layers size={22} color="var(--accent-sky)" />,
-      badge: 'RECOMMENDED'
-    },
-    {
-      id: 'API_SECURITY',
-      title: 'World Monitor API Gateway Scan',
-      desc: 'Targets /api/version, /api/health, /api/feed, testing CORS origins, rate limit bypass, and auth tokens.',
-      icon: <Terminal size={22} color="var(--accent-cyan)" />,
-      badge: 'FAST'
-    },
-    {
-      id: 'SAST',
-      title: 'Static Source Code Analysis (SAST)',
-      desc: 'Scans TypeScript/JavaScript files for hardcoded secrets, dangerous innerHTML, and insecure postMessage.',
-      icon: <Code2 size={22} color="var(--accent-indigo)" />,
-      badge: 'CODE AUDIT'
-    },
-    {
-      id: 'DAST',
-      title: 'Dynamic Web Security Crawl (DAST)',
-      desc: 'Active crawler checking reflected parameters, missing CSP/HSTS headers, and HTTP verb tampering.',
-      icon: <Globe size={22} color="var(--success-color)" />,
-      badge: 'RUNTIME'
-    }
-  ];
-
   return (
-    <div style={{ maxWidth: 880, margin: '0 auto' }}>
+    <div style={{ maxWidth: '780px', margin: '0 auto' }}>
       <div className="page-header">
+        <h1 className="page-title">New Security Assessment</h1>
+        <p className="page-subtitle">
+          Configure an authorized, evidence-based security audit of your World Monitor instance.
+        </p>
+      </div>
+
+      {/* Mandatory Authorization Banner */}
+      <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '1rem', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+        <AlertCircle size={20} color="#d97706" style={{ marginTop: '0.1rem', flexShrink: 0 }} />
         <div>
-          <h1 className="page-title">Launch Security Assessment</h1>
-          <p className="page-subtitle">Configure scan parameters and select evaluation engines for World Monitor</p>
+          <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: '#92400e', marginBottom: '0.2rem' }}>
+            Authorized Security Testing Only
+          </h4>
+          <p style={{ fontSize: '0.85rem', color: '#b45309', lineHeight: 1.45 }}>
+            Only scan applications and systems you are authorized to assess. WorldGuard uses safe, controlled, non-destructive security checks. Do not target third-party production infrastructure without explicit authorization.
+          </p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        {/* Mode Selector */}
-        <div>
-          <label className="form-label" style={{ marginBottom: '0.75rem', display: 'block' }}>
-            Select Assessment Mode
-          </label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '1rem' }}>
-            {modes.map((m) => (
-              <div
-                key={m.id}
-                onClick={() => setScanType(m.id)}
-                style={{
-                  padding: '1.25rem',
-                  borderRadius: 'var(--radius-md)',
-                  background: scanType === m.id ? 'rgba(56, 189, 248, 0.08)' : 'rgba(0,0,0,0.25)',
-                  border: scanType === m.id ? '2px solid var(--accent-sky)' : '1px solid var(--border-subtle)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  position: 'relative'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    {m.icon}
-                    <span style={{ fontWeight: 700, fontSize: '0.98rem' }}>{m.title}</span>
-                  </div>
-                  <span className="badge badge-info" style={{ fontSize: '0.65rem' }}>{m.badge}</span>
+      <div className="card">
+        <form onSubmit={handleSubmit}>
+          {/* Target URL */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="targetUrl">
+              Application Target URL
+            </label>
+            <input
+              id="targetUrl"
+              type="text"
+              className="form-input"
+              value={targetUrl}
+              onChange={(e) => setTargetUrl(e.target.value)}
+              placeholder="http://localhost:3000"
+              required
+            />
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+              Preferred target for local evaluation: <code>http://localhost:3000</code>
+            </span>
+          </div>
+
+          {/* Source Path for Semgrep */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="sourcePath">
+              Source Code Directory (for Static Analysis)
+            </label>
+            <input
+              id="sourcePath"
+              type="text"
+              className="form-input"
+              value={sourcePath}
+              onChange={(e) => setSourcePath(e.target.value)}
+              placeholder="e.g. D:\World Monitor"
+            />
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+              Absolute path to local World Monitor source code folder inspected by Semgrep AST rules.
+            </span>
+          </div>
+
+          {/* Scan Type */}
+          <div className="form-group">
+            <label className="form-label" htmlFor="scanType">
+              Scan Type
+            </label>
+            <select
+              id="scanType"
+              className="form-select"
+              value={scanType}
+              onChange={(e) => setScanType(e.target.value)}
+            >
+              <option value="COMPLETE">Complete Scan (Source + Dynamic + API)</option>
+              <option value="SAST">SAST Only (Source Code Analysis)</option>
+              <option value="API_SECURITY">API Security Only (Endpoint Probes)</option>
+              <option value="DAST">DAST Only (OWASP ZAP Dynamic Web Scan)</option>
+            </select>
+          </div>
+
+          {/* Scanner Tool Options */}
+          <div className="form-group" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem', marginTop: '1.25rem' }}>
+            <label className="form-label">
+              Active Security Tools & Checks
+            </label>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem', marginTop: '0.5rem' }}>
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={enableSemgrep}
+                  onChange={(e) => setEnableSemgrep(e.target.checked)}
+                />
+                <div>
+                  <strong>Semgrep (Static AST)</strong>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Source code patterns & secrets</div>
                 </div>
-                <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                  {m.desc}
-                </p>
-              </div>
-            ))}
+              </label>
+
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={enableApiSecurity}
+                  onChange={(e) => setEnableApiSecurity(e.target.checked)}
+                />
+                <div>
+                  <strong>API Security Suite</strong>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>CORS, headers & debug checks</div>
+                </div>
+              </label>
+
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={enableZap}
+                  onChange={(e) => setEnableZap(e.target.checked)}
+                />
+                <div>
+                  <strong>OWASP ZAP (Dynamic)</strong>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Running web application behavior</div>
+                </div>
+              </label>
+
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={enableLeakix}
+                  onChange={(e) => setEnableLeakix(e.target.checked)}
+                />
+                <div>
+                  <strong>LeakIX (OSINT Intelligence)</strong>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Public threat intelligence</div>
+                </div>
+              </label>
+            </div>
           </div>
-        </div>
 
-        {/* Target URL */}
-        <div className="form-group">
-          <label className="form-label">Target Application URL</label>
-          <input
-            type="text"
-            className="form-input"
-            value={targetUrl}
-            onChange={(e) => setTargetUrl(e.target.value)}
-            placeholder="https://worldmonitor.app or http://localhost:3000"
-            required
-          />
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-            Live endpoint evaluated by Dynamic and API Security scanners.
-          </span>
-        </div>
+          {/* External Intelligence Domain (Conditional) */}
+          {enableLeakix && (
+            <div className="form-group" style={{ background: 'var(--bg-subtle)', padding: '1rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+              <label className="form-label" htmlFor="authorizedDomain">
+                Authorized External Domain (for LeakIX)
+              </label>
+              <input
+                id="authorizedDomain"
+                type="text"
+                className="form-input"
+                value={authorizedDomain}
+                onChange={(e) => setAuthorizedDomain(e.target.value)}
+                placeholder="example.com"
+                required={enableLeakix}
+              />
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                Only public domains owned or explicitly authorized by your organization.
+              </span>
+            </div>
+          )}
 
-        {/* Source Path */}
-        <div className="form-group">
-          <label className="form-label">Source Code Path / Repository</label>
-          <input
-            type="text"
-            className="form-input"
-            value={sourcePath}
-            onChange={(e) => setSourcePath(e.target.value)}
-            placeholder="github.com/koala73/worldmonitor or D:/local/repo"
-          />
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-            Path to World Monitor source files used by SAST and Semgrep analyzers.
-          </span>
-        </div>
-
-        {/* Information Callout */}
-        <div style={{ background: 'rgba(56, 189, 248, 0.05)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(56, 189, 248, 0.2)', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-          <CheckCircle2 size={18} color="var(--accent-sky)" style={{ marginTop: 2, flexShrink: 0 }} />
-          <div style={{ fontSize: '0.84rem', color: '#cbd5e1', lineHeight: 1.5 }}>
-            <strong>Assessment Methodology:</strong> Our multi-layered pipeline runs rule-based SAST inspections, probes edge API routes for authorization and header bypasses, crawls client state parameters, and correlates findings against CWE and CVSS v3.1 scoring formulas.
+          {/* Mandatory Authorization Confirmation Checkbox */}
+          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem', marginTop: '1.25rem', marginBottom: '1.5rem' }}>
+            <label className="checkbox-label" style={{ fontWeight: 600, color: 'var(--text-main)' }}>
+              <input
+                type="checkbox"
+                checked={authorizedConfirmation}
+                onChange={(e) => setAuthorizedConfirmation(e.target.checked)}
+                required
+              />
+              <span>
+                I confirm that I am authorized to assess this target.
+              </span>
+            </label>
           </div>
-        </div>
 
-        {/* Action Button */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '1.25rem' }}>
-          <button type="button" onClick={() => onNavigate('dashboard')} className="btn btn-secondary">
-            Cancel
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={!authorizedConfirmation || loading}
+            className="btn btn-primary"
+            style={{ width: '100%', padding: '0.75rem' }}
+          >
+            <Play size={18} />
+            <span>{loading ? 'INITIALIZING ASSESSMENT...' : 'START SECURITY ASSESSMENT'}</span>
           </button>
-          <button type="submit" disabled={loading} className="btn btn-primary" style={{ padding: '0.75rem 1.75rem' }}>
-            <Play size={16} /> {loading ? 'Initializing Engines...' : 'Execute Security Scan'}
-          </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   );
 };

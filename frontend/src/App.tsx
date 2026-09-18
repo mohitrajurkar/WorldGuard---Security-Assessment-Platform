@@ -6,12 +6,12 @@ import { NewScan } from './pages/NewScan';
 import { ScanDetail } from './pages/ScanDetail';
 import { FindingsList } from './pages/FindingsList';
 import { ApiTester } from './pages/ApiTester';
-import { ArchitectureAudit } from './pages/ArchitectureAudit';
+import { ExternalIntelligence } from './pages/ExternalIntelligence';
 import { Reports } from './pages/Reports';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [selectedScanId, setSelectedScanId] = useState<number | undefined>(undefined);
+  const [selectedScanId, setSelectedScanId] = useState<number | null>(null);
 
   const handleNavigate = (tab: string, scanId?: number) => {
     if (scanId !== undefined) {
@@ -26,17 +26,18 @@ export const App: React.FC = () => {
       case 'dashboard':
         return <Dashboard onNavigate={handleNavigate} />;
       case 'scans':
+        if (selectedScanId !== null) {
+          return <ScanDetail scanId={selectedScanId} onNavigate={handleNavigate} />;
+        }
         return <ScansList onNavigate={handleNavigate} />;
       case 'new-scan':
         return <NewScan onNavigate={handleNavigate} />;
-      case 'scan-detail':
-        return <ScanDetail scanId={selectedScanId || 1} onNavigate={handleNavigate} />;
       case 'findings':
         return <FindingsList />;
-      case 'api-tester':
+      case 'api-scan':
         return <ApiTester />;
-      case 'architecture':
-        return <ArchitectureAudit />;
+      case 'external-intel':
+        return <ExternalIntelligence />;
       case 'reports':
         return <Reports />;
       default:
@@ -46,7 +47,13 @@ export const App: React.FC = () => {
 
   return (
     <div className="app-container">
-      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Navbar
+        currentTab={activeTab === 'new-scan' ? 'scans' : activeTab}
+        onSelectTab={(tab) => {
+          setSelectedScanId(null);
+          setActiveTab(tab);
+        }}
+      />
       <main className="main-content">
         {renderContent()}
       </main>

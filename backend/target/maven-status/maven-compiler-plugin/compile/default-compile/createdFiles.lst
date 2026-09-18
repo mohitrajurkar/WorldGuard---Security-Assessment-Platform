@@ -1,6 +1,9 @@
+com\sih\securityplatform\service\RiskScoringService$1.class
 com\sih\securityplatform\service\VulnerabilityEngine.class
 com\sih\securityplatform\service\ApiScannerService.class
 com\sih\securityplatform\controller\ScanController.class
+com\sih\securityplatform\service\SemgrepService$1.class
+com\sih\securityplatform\controller\DashboardController$1.class
 com\sih\securityplatform\dto\DashboardSummaryDto.class
 com\sih\securityplatform\model\Report.class
 com\sih\securityplatform\dto\ScanProgressDto.class
@@ -15,6 +18,7 @@ com\sih\securityplatform\model\Finding.class
 com\sih\securityplatform\model\ScanType.class
 com\sih\securityplatform\service\ReportGeneratorService.class
 com\sih\securityplatform\controller\DashboardController.class
+com\sih\securityplatform\service\ZapService$1.class
 com\sih\securityplatform\SecurityPlatformApplication.class
 com\sih\securityplatform\service\ReportGeneratorService$1.class
 com\sih\securityplatform\service\StaticAnalysisService.class
@@ -27,4 +31,5 @@ com\sih\securityplatform\repository\ReportRepository.class
 com\sih\securityplatform\service\ScanOrchestratorService.class
 com\sih\securityplatform\controller\ApiProbeController.class
 com\sih\securityplatform\service\DastScannerService.class
+com\sih\securityplatform\service\FindingNormalizer$1.class
 com\sih\securityplatform\model\FindingCategory.class

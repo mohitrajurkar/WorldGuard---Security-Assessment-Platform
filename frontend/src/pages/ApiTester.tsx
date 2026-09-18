@@ -1,33 +1,23 @@
 import React, { useState } from 'react';
 import { api, ApiProbeResult } from '../services/api';
-import { 
-  Terminal, 
-  Play, 
-  ShieldAlert, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Clock, 
-  Send, 
-  Code 
-} from 'lucide-react';
+import { Send, CheckCircle2, AlertTriangle, ShieldCheck, Terminal } from 'lucide-react';
 
 export const ApiTester: React.FC = () => {
   const [method, setMethod] = useState('GET');
-  const [url, setUrl] = useState('https://worldmonitor.app/api/version');
+  const [url, setUrl] = useState('http://localhost:3000/api/version');
   const [headersText, setHeadersText] = useState(
-    'Origin: https://attacker-preview.vercel.app\nX-Forwarded-For: 127.0.0.1\nUser-Agent: WM-Security-Probe/1.0'
+    'Origin: https://untrusted-preview.example.com\nUser-Agent: WorldGuard-Probe/1.0'
   );
   const [body, setBody] = useState('');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ApiProbeResult | null>(null);
 
   const presets = [
-    { label: '/api/version (Version Disclosure)', url: 'https://worldmonitor.app/api/version', method: 'GET' },
-    { label: '/api/health (Service Health Check)', url: 'https://worldmonitor.app/api/health', method: 'GET' },
-    { label: '/api/seed-contract-probe (Debug Probe)', url: 'https://worldmonitor.app/api/seed-contract-probe', method: 'GET' },
-    { label: '/api/feed (Rate Limiting Test)', url: 'https://worldmonitor.app/api/feed', method: 'GET' },
-    { label: 'TRACE Method (XST Vulnerability Test)', url: 'https://worldmonitor.app/api/version', method: 'TRACE' },
-    { label: 'CORS Wildcard Test (OPTIONS)', url: 'https://worldmonitor.app/api/version', method: 'OPTIONS' },
+    { label: 'Security Headers Check (Root)', url: 'http://localhost:3000', method: 'GET' },
+    { label: '/api/version (Information Disclosure)', url: 'http://localhost:3000/api/version', method: 'GET' },
+    { label: '/api/health (Service State Check)', url: 'http://localhost:3000/api/health', method: 'GET' },
+    { label: 'CORS Preflight Test (OPTIONS)', url: 'http://localhost:3000/api/version', method: 'OPTIONS' },
+    { label: 'HTTP TRACE Verb Verification', url: 'http://localhost:3000', method: 'TRACE' },
   ];
 
   const handleApplyPreset = (p: typeof presets[0]) => {
@@ -56,8 +46,8 @@ export const ApiTester: React.FC = () => {
         body: ['POST', 'PUT'].includes(method) ? body : undefined,
       });
       setResult(res);
-    } catch (err) {
-      alert('Probe error: ' + err);
+    } catch (err: any) {
+      alert('Probe failed: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -66,192 +56,175 @@ export const ApiTester: React.FC = () => {
   return (
     <div>
       <div className="page-header">
-        <div>
-          <h1 className="page-title">
-            <Terminal size={28} color="var(--accent-sky)" />
-            Live API Security Probe
-          </h1>
-          <p className="page-subtitle">
-            Interactive endpoint tester for probing World Monitor edge functions against CORS, rate limiting, and header flaws
-          </p>
-        </div>
+        <h1 className="page-title">Interactive API Security Probe</h1>
+        <p className="page-subtitle">
+          Safely test endpoints against authorized targets and capture real HTTP response evidence.
+        </p>
       </div>
 
-      {/* Preset Quick Actions */}
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
-        <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)', alignSelf: 'center', marginRight: '0.5rem' }}>
-          Quick Presets:
+      {/* Preset Buttons */}
+      <div style={{ marginBottom: '1.25rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', alignSelf: 'center', marginRight: '0.25rem' }}>
+          Safe Presets:
         </span>
         {presets.map((p, idx) => (
           <button
             key={idx}
             type="button"
             onClick={() => handleApplyPreset(p)}
-            className="btn btn-secondary"
-            style={{ fontSize: '0.78rem', padding: '0.35rem 0.75rem' }}
+            className="btn btn-outline btn-sm"
           >
             {p.label}
           </button>
         ))}
       </div>
 
-      {/* Main Form & Response Grid */}
-      <div className="grid-2" style={{ gridTemplateColumns: '48% 52%' }}>
-        {/* Probe Request Form */}
-        <form onSubmit={handleSendProbe} className="card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Request Parameters</h2>
+      {/* Probe Configuration Form */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <form onSubmit={handleSendProbe}>
+          <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            <div style={{ width: '120px' }}>
+              <label className="form-label" htmlFor="method">Method</label>
+              <select
+                id="method"
+                className="form-select"
+                value={method}
+                onChange={(e) => setMethod(e.target.value)}
+              >
+                <option value="GET">GET</option>
+                <option value="POST">POST</option>
+                <option value="OPTIONS">OPTIONS</option>
+                <option value="TRACE">TRACE</option>
+                <option value="PUT">PUT</option>
+                <option value="DELETE">DELETE</option>
+              </select>
+            </div>
 
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <select
-              value={method}
-              onChange={(e) => setMethod(e.target.value)}
-              className="form-select"
-              style={{ width: '130px', fontWeight: 700, fontFamily: 'var(--font-mono)' }}
-            >
-              <option value="GET">GET</option>
-              <option value="POST">POST</option>
-              <option value="OPTIONS">OPTIONS</option>
-              <option value="TRACE">TRACE</option>
-              <option value="PUT">PUT</option>
-              <option value="DELETE">DELETE</option>
-            </select>
-
-            <input
-              type="text"
-              className="form-input"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://worldmonitor.app/api/..."
-              required
-            />
+            <div style={{ flex: 1, minWidth: '260px' }}>
+              <label className="form-label" htmlFor="url">Target Endpoint URL</label>
+              <input
+                id="url"
+                type="text"
+                className="form-input"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                required
+              />
+            </div>
           </div>
 
-          <div className="form-group" style={{ margin: 0 }}>
-            <label className="form-label">HTTP Request Headers (Key: Value)</label>
+          <div className="form-group">
+            <label className="form-label" htmlFor="headers">
+              HTTP Request Headers (Header: Value per line)
+            </label>
             <textarea
-              className="form-textarea"
-              rows={4}
+              id="headers"
+              className="form-input"
+              rows={3}
+              style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}
               value={headersText}
               onChange={(e) => setHeadersText(e.target.value)}
-              placeholder="Header-Name: Value"
             />
           </div>
 
           {['POST', 'PUT'].includes(method) && (
-            <div className="form-group" style={{ margin: 0 }}>
-              <label className="form-label">Request Body Payload</label>
+            <div className="form-group">
+              <label className="form-label" htmlFor="body">Request Payload Body</label>
               <textarea
-                className="form-textarea"
-                rows={4}
+                id="body"
+                className="form-input"
+                rows={3}
+                style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem' }}
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                placeholder='{"query": "military conflicts"}'
+                placeholder="{}"
               />
             </div>
           )}
 
-          <button type="submit" disabled={loading} className="btn btn-primary" style={{ padding: '0.75rem', marginTop: '0.5rem' }}>
-            <Send size={16} /> {loading ? 'Sending Probe...' : 'Dispatch Live Security Probe'}
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn btn-primary"
+            style={{ width: '100%', padding: '0.65rem' }}
+          >
+            <Send size={16} />
+            <span>{loading ? 'SENDING PROBE...' : 'DISPATCH SAFE PROBE'}</span>
           </button>
         </form>
+      </div>
 
-        {/* Probe Response & Analysis */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', minHeight: 450 }}>
-          <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '0.75rem' }}>
-            Automated Diagnostic Assessment
-          </h2>
-
-          {!result && !loading && (
-            <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-muted)', margin: 'auto' }}>
-              <Code size={40} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
-              <p>Execute a probe to inspect security headers, CORS reflections, and API vulnerability signals in real time.</p>
+      {/* Real Evidence Result */}
+      {result && (
+        <div className="card">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-main)' }}>
+              Observed Response Evidence
+            </h3>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <span className={`badge ${result.statusCode >= 200 && result.statusCode < 300 ? 'badge-info' : 'badge-review'}`}>
+                HTTP {result.statusCode} {result.statusText}
+              </span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                {result.responseTimeMs}ms
+              </span>
             </div>
-          )}
+          </div>
 
-          {loading && (
-            <div style={{ textAlign: 'center', padding: '4rem 1rem', margin: 'auto' }}>
-              <Clock size={36} className="animate-spin" color="var(--accent-sky)" />
-              <p style={{ marginTop: '1rem', color: 'var(--text-secondary)' }}>Transmitting probe & evaluating headers...</p>
-            </div>
-          )}
+          {/* Security Observations */}
+          <div style={{ marginBottom: '1.25rem' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+              Security Observations & Grade:
+            </span>
 
-          {result && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {/* Status Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <span className={result.statusCode >= 200 && result.statusCode < 300 ? 'badge badge-success' : 'badge badge-critical'}>
-                    HTTP {result.statusCode}
-                  </span>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{result.statusText}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', fontSize: '0.85rem' }}>
-                  <span style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{result.responseTimeMs} ms</span>
-                  <span style={{ 
-                    fontFamily: 'var(--font-mono)', 
-                    fontWeight: 800,
-                    color: result.securityGradeScore >= 75 ? 'var(--success-color)' : 'var(--crit-color)' 
-                  }}>
-                    Grade: {result.securityGradeScore}/100
-                  </span>
-                </div>
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+              <div style={{ background: 'var(--bg-subtle)', padding: '0.5rem 0.8rem', borderRadius: '6px', fontSize: '0.85rem', flex: 1 }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Defensive Grade</div>
+                <strong style={{ fontSize: '1.25rem', color: result.securityGradeScore >= 80 ? '#16a34a' : '#d97706' }}>
+                  {result.securityGradeScore} / 100
+                </strong>
               </div>
 
-              {/* Security Alert Warnings */}
-              {result.securityAlerts.length > 0 && (
-                <div style={{ background: 'var(--crit-bg)', border: '1px solid var(--crit-border)', borderRadius: 'var(--radius-md)', padding: '0.75rem 1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--crit-color)', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.4rem' }}>
-                    <ShieldAlert size={16} /> Security Weaknesses Detected ({result.securityAlerts.length})
-                  </div>
-                  <ul style={{ paddingLeft: '1.25rem', fontSize: '0.82rem', color: '#fecdd3' }}>
-                    {result.securityAlerts.map((alert, i) => (
-                      <li key={i}>{alert}</li>
-                    ))}
+              <div style={{ background: 'var(--bg-subtle)', padding: '0.5rem 0.8rem', borderRadius: '6px', fontSize: '0.85rem', flex: 2 }}>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Active Alerts</div>
+                {result.securityAlerts && result.securityAlerts.length > 0 ? (
+                  <ul style={{ paddingLeft: '1.1rem', marginTop: '0.2rem', color: 'var(--high-color)' }}>
+                    {result.securityAlerts.map((a, i) => <li key={i}>{a}</li>)}
                   </ul>
-                </div>
-              )}
-
-              {/* Positive Controls */}
-              {result.positiveControls.length > 0 && (
-                <div style={{ background: 'var(--success-bg)', border: '1px solid var(--success-border)', borderRadius: 'var(--radius-md)', padding: '0.75rem 1rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--success-color)', fontWeight: 700, fontSize: '0.85rem', marginBottom: '0.4rem' }}>
-                    <CheckCircle2 size={16} /> Verified Security Controls
-                  </div>
-                  <ul style={{ paddingLeft: '1.25rem', fontSize: '0.82rem', color: '#a7f3d0' }}>
-                    {result.positiveControls.map((ctrl, i) => (
-                      <li key={i}>{ctrl}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Response Headers */}
-              <div>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-                  Response Headers ({Object.keys(result.responseHeaders).length})
-                </span>
-                <div className="code-box" style={{ maxHeight: 120, overflowY: 'auto', marginTop: 4 }}>
-                  {Object.entries(result.responseHeaders).map(([k, v]) => (
-                    <div key={k}><strong style={{ color: 'var(--accent-sky)' }}>{k}:</strong> {v}</div>
-                  ))}
-                </div>
+                ) : (
+                  <div style={{ color: '#16a34a', marginTop: '0.2rem' }}>No alerts triggered.</div>
+                )}
               </div>
+            </div>
+          </div>
 
-              {/* Body snippet */}
-              {result.responseBody && (
-                <div>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-                    Response Payload Snippet
-                  </span>
-                  <pre className="code-box" style={{ maxHeight: 150, overflowY: 'auto', marginTop: 4 }}>
-                    {result.responseBody}
-                  </pre>
-                </div>
+          {/* Response Headers */}
+          <div style={{ marginBottom: '1.25rem' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+              Response Headers:
+            </span>
+            <div className="code-box" style={{ marginTop: '0.35rem' }}>
+              {result.responseHeaders && Object.keys(result.responseHeaders).length > 0 ? (
+                Object.entries(result.responseHeaders).map(([k, v]) => `${k}: ${v}`).join('\n')
+              ) : (
+                'No response headers recorded.'
               )}
+            </div>
+          </div>
+
+          {/* Response Body */}
+          {result.responseBody && (
+            <div>
+              <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                Response Body (Payload Snippet):
+              </span>
+              <div className="code-box" style={{ marginTop: '0.35rem', maxHeight: '200px' }}>
+                {result.responseBody}
+              </div>
             </div>
           )}
         </div>
-      </div>
+      )}
     </div>
   );
 };

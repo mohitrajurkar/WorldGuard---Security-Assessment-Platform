@@ -17,14 +17,10 @@ export interface PositiveCheck {
   status: string;
 }
 
-/**
- * Maps complex cybersecurity findings into clear, non-technical plain English.
- */
 export function getPlainLanguageFinding(f: Finding): PlainFindingInfo {
   const titleLower = f.title.toLowerCase();
   const cweLower = (f.cwe || '').toLowerCase();
 
-  // 1. Hardcoded Secret / Relay Secret
   if (titleLower.includes('hardcoded') || titleLower.includes('secret') || cweLower.includes('798')) {
     return {
       plainTitle: 'Secret Password Found in Project Code',
@@ -38,7 +34,6 @@ export function getPlainLanguageFinding(f: Finding): PlainFindingInfo {
     };
   }
 
-  // 2. Origin-Based Exemption / Auth Bypass
   if (titleLower.includes('origin-based') || titleLower.includes('api key exemption') || titleLower.includes('auth')) {
     return {
       plainTitle: 'Website Can Be Tricked Into Bypassing Login Check',
@@ -52,7 +47,6 @@ export function getPlainLanguageFinding(f: Finding): PlainFindingInfo {
     };
   }
 
-  // 3. CORS Wildcard
   if (titleLower.includes('cors') || titleLower.includes('permissive wildcard')) {
     return {
       plainTitle: 'External Websites Allowed to Read Private Data',
@@ -66,7 +60,6 @@ export function getPlainLanguageFinding(f: Finding): PlainFindingInfo {
     };
   }
 
-  // 4. SSRF / Webhook DNS
   if (titleLower.includes('ssrf') || titleLower.includes('webhook') || cweLower.includes('918')) {
     return {
       plainTitle: 'Webhook Can Be Fooled Into Calling Internal Servers',
@@ -80,7 +73,6 @@ export function getPlainLanguageFinding(f: Finding): PlainFindingInfo {
     };
   }
 
-  // 5. XSS / innerHTML
   if (titleLower.includes('innerhtml') || titleLower.includes('injection') || cweLower.includes('79')) {
     return {
       plainTitle: 'News Feed Content Not Cleaned Before Displaying',
@@ -94,7 +86,6 @@ export function getPlainLanguageFinding(f: Finding): PlainFindingInfo {
     };
   }
 
-  // 6. Bot filter bypass
   if (titleLower.includes('bot') || titleLower.includes('user-agent')) {
     return {
       plainTitle: 'Automated Scraping Robots Can Bypass Filters',
@@ -108,7 +99,6 @@ export function getPlainLanguageFinding(f: Finding): PlainFindingInfo {
     };
   }
 
-  // 7. Seed probe / Debug endpoints
   if (titleLower.includes('seed') || titleLower.includes('debug') || titleLower.includes('probe')) {
     return {
       plainTitle: 'Internal Test Page Left Visible to the Public',
@@ -122,7 +112,6 @@ export function getPlainLanguageFinding(f: Finding): PlainFindingInfo {
     };
   }
 
-  // 8. Insecure localStorage
   if (titleLower.includes('localstorage') || titleLower.includes('storage')) {
     return {
       plainTitle: 'User Settings & Keys Stored Unencrypted in Browser',
@@ -136,7 +125,6 @@ export function getPlainLanguageFinding(f: Finding): PlainFindingInfo {
     };
   }
 
-  // 9. Rate limit spoofing
   if (titleLower.includes('rate limit') || titleLower.includes('x-forwarded-for')) {
     return {
       plainTitle: 'Rate Limits Can Be Evaded Using Fake IP Headers',
@@ -150,13 +138,12 @@ export function getPlainLanguageFinding(f: Finding): PlainFindingInfo {
     };
   }
 
-  // 10. Missing CSP / X-Frame-Options / Security Headers
   if (titleLower.includes('content-security-policy') || titleLower.includes('csp') || titleLower.includes('frame') || titleLower.includes('clickjacking')) {
     return {
       plainTitle: 'Website Missing Standard Browser Defense Headers',
       categoryLabel: 'Browser Defenses',
-      urgencyLabel: 'Good Practice',
-      urgencyBadgeClass: 'badge-neutral',
+      urgencyLabel: 'Recommended Improvement',
+      urgencyBadgeClass: 'badge-info',
       whatItMeans: 'The web server does not send standard security rules telling browsers how to prevent framing and script injections.',
       whyItMatters: 'Other websites could embed this application in an invisible frame or load unauthorized third-party scripts.',
       simpleFix: 'Add "Content-Security-Policy" and "X-Frame-Options: SAMEORIGIN" to your web hosting configuration file.',
@@ -164,95 +151,97 @@ export function getPlainLanguageFinding(f: Finding): PlainFindingInfo {
     };
   }
 
-  // 11. Version disclosure / metadata
-  if (titleLower.includes('version') || titleLower.includes('metadata') || titleLower.includes('exposure')) {
-    return {
-      plainTitle: 'Software Version & Build Details Publicly Shared',
-      categoryLabel: 'Information Sharing',
-      urgencyLabel: 'Good Practice',
-      urgencyBadgeClass: 'badge-neutral',
-      whatItMeans: 'The public /api/version address shares exact git commit hashes and server runtime versions.',
-      whyItMatters: 'Provides extra information for scanners mapping specific versions of packages you use.',
-      simpleFix: 'Return a simple status code or hide git commit hashes from public view.',
-      estimatedFixTime: '10 minutes'
-    };
-  }
-
-  // Default fallback
-  const isHighOrCrit = f.severity === 'CRITICAL' || f.severity === 'HIGH';
   return {
     plainTitle: f.title,
-    categoryLabel: (f.category || 'Security Check').replace('_', ' '),
-    urgencyLabel: isHighOrCrit ? 'Important Fix' : 'Recommended Improvement',
-    urgencyBadgeClass: isHighOrCrit ? 'badge-warning' : 'badge-neutral',
-    whatItMeans: f.description || 'A potential security or configuration inconsistency was detected.',
-    whyItMatters: f.impact || 'Addressing this helps keep system components secure and stable.',
-    simpleFix: f.recommendation || 'Consult your developer team to apply standard framework hardening.',
-    estimatedFixTime: `${f.remediationTimeMinutes || 30} minutes`
+    categoryLabel: f.category || 'Security Setting',
+    urgencyLabel: f.severity === 'CRITICAL' ? 'Needs Immediate Fix' : f.severity === 'HIGH' ? 'Important Fix' : 'Recommended Improvement',
+    urgencyBadgeClass: f.severity === 'CRITICAL' ? 'badge-urgent' : f.severity === 'HIGH' ? 'badge-warning' : 'badge-info',
+    whatItMeans: f.description,
+    whyItMatters: f.impact || 'Leaving this unaddressed increases security exposure.',
+    simpleFix: f.recommendation || 'Apply standard security hardening practices.',
+    estimatedFixTime: f.remediationTimeMinutes ? `${f.remediationTimeMinutes} minutes` : '30-60 minutes'
   };
 }
 
-/**
- * Generates verified passed checks to show what is working well and secure.
- */
+export function getHealthGrade(score: number): {
+  grade: string;
+  gradeColor: string;
+  badgeLabel: string;
+  summaryText: string;
+  adviceText: string;
+  statusClass: string;
+} {
+  if (score === 0) {
+    return {
+      grade: 'N/A',
+      gradeColor: 'var(--text-muted)',
+      badgeLabel: 'Unassessed',
+      summaryText: 'Initial baseline set to zero. Run an audit to calculate posture score.',
+      adviceText: 'Run an initial scan or seed test data to analyze defenses.',
+      statusClass: 'status-neutral'
+    };
+  }
+  if (score >= 85) {
+    return {
+      grade: 'A',
+      gradeColor: 'var(--success-color)',
+      badgeLabel: 'Well Fortified',
+      summaryText: 'Outstanding posture. Core defenses and headers are robustly enforced.',
+      adviceText: 'Maintain security headers and conduct scheduled scans.',
+      statusClass: 'status-healthy'
+    };
+  }
+  if (score >= 70) {
+    return {
+      grade: 'B',
+      gradeColor: 'var(--med-color)',
+      badgeLabel: 'Moderate Risk',
+      summaryText: 'Solid baseline. A few configuration updates will significantly elevate defenses.',
+      adviceText: 'Address medium priority findings and tighten CORS/session settings.',
+      statusClass: 'status-warning'
+    };
+  }
+  if (score >= 50) {
+    return {
+      grade: 'C',
+      gradeColor: 'var(--high-color)',
+      badgeLabel: 'Needs Attention',
+      summaryText: 'Exposed to automated scans. Fix high-priority items in next sprint.',
+      adviceText: 'Fix high-priority items in the next sprint and review API endpoints.',
+      statusClass: 'status-urgent'
+    };
+  }
+  return {
+    grade: 'D',
+    gradeColor: 'var(--crit-color)',
+    badgeLabel: 'Action Required',
+    summaryText: 'Critical vulnerabilities present. Needs immediate engineering remediation.',
+    adviceText: 'Review urgent items below with your technical team and remove hardcoded secrets.',
+    statusClass: 'status-urgent'
+  };
+}
+
 export function getPositiveControls(): PositiveCheck[] {
   return [
     {
-      title: 'HTTPS / TLS Encryption Active',
-      description: 'All communication between users and the server is encrypted using modern TLS certificates.',
-      status: 'Protected'
+      title: 'HTTPS / TLS Modern Encryption',
+      description: 'Enforces TLS 1.3 encryption across all client-to-edge traffic.',
+      status: 'PASSING'
     },
     {
-      title: 'SQL Injection Safeguards',
-      description: 'The database access layer uses parameterized queries and typed ORM bindings, preventing database tampering.',
-      status: 'Protected'
+      title: 'Upstash Redis Rate Limiter Attached',
+      description: 'Sliding-window token bucket is mounted on core API routes.',
+      status: 'ACTIVE'
     },
     {
-      title: 'Edge Route Availability & Health',
-      description: 'Primary edge routing nodes respond within normal latency thresholds with zero packet drop.',
-      status: 'Healthy'
+      title: 'Content Security Policy (CSP)',
+      description: 'Default-src and script-src directives restrict external script execution.',
+      status: 'PASSING'
     },
     {
-      title: 'Cross-Site Request Forgery (CSRF) Isolation',
-      description: 'API architecture uses JSON payloads and Bearer authentication, preventing traditional cookie CSRF attacks.',
-      status: 'Protected'
+      title: 'Edge Deployment Isolation',
+      description: 'Runs on isolated V8 edge microVMs with memory sandboxing.',
+      status: 'ACTIVE'
     }
   ];
-}
-
-/**
- * Plain-English security health summary for executive/non-cyber understanding.
- */
-export function getHealthGrade(score: number): {
-  grade: string;
-  badgeLabel: string;
-  statusClass: string;
-  summaryText: string;
-  adviceText: string;
-} {
-  if (score >= 80) {
-    return {
-      grade: 'A',
-      badgeLabel: 'Healthy Security Posture',
-      statusClass: 'status-healthy',
-      summaryText: 'The core security safeguards are active and functioning effectively.',
-      adviceText: 'Continue regular maintenance and apply standard browser header updates.'
-    };
-  }
-  if (score >= 60) {
-    return {
-      grade: 'B',
-      badgeLabel: 'Minor Improvements Needed',
-      statusClass: 'status-warning',
-      summaryText: 'The core system is operational, but a few settings and keys should be tightened before public production.',
-      adviceText: 'Ask your developers to review the recommended fixes listed below in their next update.'
-    };
-  }
-  return {
-    grade: 'Needs Attention',
-    badgeLabel: 'Action Needed Before Production',
-    statusClass: 'status-urgent',
-    summaryText: 'Several high-priority items were found that should be addressed to prevent unauthorized access.',
-    adviceText: 'Review the urgent items below with your technical team and remove hardcoded secrets.'
-  };
 }

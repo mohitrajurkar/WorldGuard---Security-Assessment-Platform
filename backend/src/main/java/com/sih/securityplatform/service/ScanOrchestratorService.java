@@ -5,6 +5,8 @@ import com.sih.securityplatform.dto.ScanRequest;
 import com.sih.securityplatform.model.*;
 import com.sih.securityplatform.repository.FindingRepository;
 import com.sih.securityplatform.repository.ScanRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -16,12 +18,17 @@ import java.util.concurrent.*;
 @Service
 public class ScanOrchestratorService {
 
+    private static final Logger log = LoggerFactory.getLogger(ScanOrchestratorService.class);
+
     private final ScanRepository scanRepository;
     private final FindingRepository findingRepository;
-    private final StaticAnalysisService staticAnalysisService;
-    private final DastScannerService dastScannerService;
+    private final SemgrepService semgrepService;
+    private final ZapService zapService;
     private final ApiScannerService apiScannerService;
-    private final VulnerabilityEngine vulnerabilityEngine;
+    private final LeakIXService leakIXService;
+    private final FindingNormalizer findingNormalizer;
+    private final FindingDeduplicator findingDeduplicator;
+    private final RiskScoringService riskScoringService;
 
     private final Map<Long, List<SseEmitter>> emitters = new ConcurrentHashMap<>();
     private final ExecutorService executorService = Executors.newFixedThreadPool(4);
@@ -29,46 +36,54 @@ public class ScanOrchestratorService {
     public ScanOrchestratorService(
             ScanRepository scanRepository,
             FindingRepository findingRepository,
-            StaticAnalysisService staticAnalysisService,
-            DastScannerService dastScannerService,
+            SemgrepService semgrepService,
+            ZapService zapService,
             ApiScannerService apiScannerService,
-            VulnerabilityEngine vulnerabilityEngine) {
+            LeakIXService leakIXService,
+            FindingNormalizer findingNormalizer,
+            FindingDeduplicator findingDeduplicator,
+            RiskScoringService riskScoringService) {
         this.scanRepository = scanRepository;
         this.findingRepository = findingRepository;
-        this.staticAnalysisService = staticAnalysisService;
-        this.dastScannerService = dastScannerService;
+        this.semgrepService = semgrepService;
+        this.zapService = zapService;
         this.apiScannerService = apiScannerService;
-        this.vulnerabilityEngine = vulnerabilityEngine;
+        this.leakIXService = leakIXService;
+        this.findingNormalizer = findingNormalizer;
+        this.findingDeduplicator = findingDeduplicator;
+        this.riskScoringService = riskScoringService;
     }
 
     public Scan initiateScan(ScanRequest request) {
         Scan scan = new Scan();
         scan.setScanType(request.getScanType() != null ? request.getScanType() : ScanType.COMPLETE);
         scan.setStatus(ScanStatus.RUNNING);
-        scan.setTargetUrl(request.getTargetUrl() != null && !request.getTargetUrl().isBlank() ? request.getTargetUrl() : "https://worldmonitor.app");
+
+        String target = request.getTargetUrl() != null && !request.getTargetUrl().isBlank()
+                ? request.getTargetUrl()
+                : "http://localhost:3000";
+        scan.setTargetUrl(target);
         scan.setSourcePath(request.getSourcePath());
         scan.setStartedAt(LocalDateTime.now());
         scan.setProgressPercent(5);
-        scan.setCurrentStep("Initializing assessment orchestrator...");
+        scan.setCurrentStep("Target Validation");
         scan.setDemo(request.isDemo());
 
         Scan saved = scanRepository.save(scan);
+        log.info("Scan started [ID: {}] for target {}", saved.getId(), target);
 
-        // Execute asynchronously
         executorService.submit(() -> executeScanAsync(saved.getId(), request));
-
         return saved;
     }
 
     public SseEmitter subscribeToScan(Long scanId) {
-        SseEmitter emitter = new SseEmitter(180_000L); // 3 minutes timeout
+        SseEmitter emitter = new SseEmitter(180_000L);
         emitters.computeIfAbsent(scanId, k -> new CopyOnWriteArrayList<>()).add(emitter);
 
         emitter.onCompletion(() -> removeEmitter(scanId, emitter));
         emitter.onTimeout(() -> removeEmitter(scanId, emitter));
         emitter.onError(e -> removeEmitter(scanId, emitter));
 
-        // Send immediate current state
         scanRepository.findById(scanId).ifPresent(scan -> {
             try {
                 emitter.send(SseEmitter.event()
@@ -112,64 +127,127 @@ public class ScanOrchestratorService {
         if (opt.isEmpty()) return;
         Scan scan = opt.get();
 
-        List<Finding> allFindings = new ArrayList<>();
+        List<Finding> collectedFindings = new ArrayList<>();
 
         try {
-            // Step 1: Pre-flight & Handshake
-            updateScanStep(scan, 15, "Connecting to target & inspecting architecture...");
-            Thread.sleep(800);
+            // 1. Target Validation
+            log.info("Target validated: {}", scan.getTargetUrl());
+            updateScanStep(scan, 10, "Target Validation");
+            Thread.sleep(400);
 
-            // Step 2: SAST Static Analysis
-            if (scan.getScanType() == ScanType.COMPLETE || scan.getScanType() == ScanType.SAST) {
-                updateScanStep(scan, 35, "Running Static Code Analysis (Semgrep & AST rules)...");
-                List<Finding> sastFindings = staticAnalysisService.scanRepository(scan.getSourcePath());
-                for (Finding f : sastFindings) {
-                    scan.addFinding(f);
+            // 2. Source Analysis (Semgrep)
+            boolean shouldRunSemgrep = request.isEnableSemgrep() &&
+                    (scan.getScanType() == ScanType.COMPLETE || scan.getScanType() == ScanType.SAST);
+
+            if (shouldRunSemgrep) {
+                log.info("Semgrep started");
+                updateScanStep(scan, 25, "Source Analysis (Semgrep)");
+
+                String sourcePath = scan.getSourcePath();
+                if (sourcePath != null && !sourcePath.isBlank()) {
+                    List<Finding> sast = semgrepService.scanSource(sourcePath);
+                    collectedFindings.addAll(sast);
+                } else {
+                    log.info("No source directory specified; skipping static code scan.");
                 }
-                allFindings.addAll(sastFindings);
-                Thread.sleep(1000);
+                log.info("Semgrep completed");
+                Thread.sleep(500);
             }
 
-            // Step 3: DAST Dynamic Web Scan
-            if (scan.getScanType() == ScanType.COMPLETE || scan.getScanType() == ScanType.DAST) {
-                updateScanStep(scan, 60, "Running Dynamic Web Security Testing (DAST & Crawling)...");
-                List<Finding> dastFindings = dastScannerService.scanTarget(scan.getTargetUrl());
-                for (Finding f : dastFindings) {
-                    scan.addFinding(f);
-                }
-                allFindings.addAll(dastFindings);
-                Thread.sleep(1000);
-            }
+            // 3. API Security Testing
+            boolean shouldRunApi = request.isEnableApiSecurity() &&
+                    (scan.getScanType() == ScanType.COMPLETE || scan.getScanType() == ScanType.API_SECURITY);
 
-            // Step 4: API Security Scanner
-            if (scan.getScanType() == ScanType.COMPLETE || scan.getScanType() == ScanType.API_SECURITY) {
-                updateScanStep(scan, 80, "Probing World Monitor API Gateway & Headers...");
+            if (shouldRunApi) {
+                log.info("API scan started");
+                updateScanStep(scan, 45, "API Security Testing");
+
                 List<Finding> apiFindings = apiScannerService.scanTarget(scan.getTargetUrl());
-                for (Finding f : apiFindings) {
-                    scan.addFinding(f);
-                }
-                allFindings.addAll(apiFindings);
-                Thread.sleep(800);
+                collectedFindings.addAll(apiFindings);
+                log.info("API scan completed");
+                Thread.sleep(400);
             }
 
-            // Step 5: Vulnerability Correlation & Risk Scoring
-            updateScanStep(scan, 95, "Correlating findings, scoring CVSS & calculating risk index...");
-            vulnerabilityEngine.recalculateScanStats(scan, allFindings);
-            scan.setStatus(ScanStatus.COMPLETED);
-            scan.setCompletedAt(LocalDateTime.now());
+            // 4. Dynamic Web Testing (ZAP)
+            boolean shouldRunZap = request.isEnableZap() &&
+                    (scan.getScanType() == ScanType.COMPLETE || scan.getScanType() == ScanType.DAST);
+
+            if (shouldRunZap) {
+                log.info("ZAP started");
+                updateScanStep(scan, 65, "Dynamic Web Testing (ZAP)");
+
+                if (zapService.isAvailable()) {
+                    List<Finding> zapFindings = zapService.scanTarget(scan.getTargetUrl());
+                    collectedFindings.addAll(zapFindings);
+                } else {
+                    log.info("ZAP unavailable — dynamic scan could not be completed.");
+                }
+                log.info("ZAP completed");
+                Thread.sleep(400);
+            }
+
+            // 5. External Intelligence (LeakIX)
+            boolean shouldRunLeakIX = request.isEnableLeakix();
+            if (shouldRunLeakIX) {
+                log.info("LeakIX lookup started");
+                updateScanStep(scan, 80, "External Intelligence (LeakIX)");
+
+                String domainToQuery = request.getAuthorizedDomain() != null && !request.getAuthorizedDomain().isBlank()
+                        ? request.getAuthorizedDomain()
+                        : extractDomain(scan.getTargetUrl());
+
+                if (leakIXService.isConfigured()) {
+                    List<Finding> leakFindings = leakIXService.queryIntelligence(domainToQuery);
+                    collectedFindings.addAll(leakFindings);
+                } else {
+                    log.info("External intelligence unavailable.");
+                }
+                log.info("LeakIX completed");
+                Thread.sleep(400);
+            }
+
+            // 6. Finding Analysis, Normalization & Deduplication
+            log.info("Findings normalized");
+            findingNormalizer.normalize(collectedFindings);
+            List<Finding> deduplicated = findingDeduplicator.deduplicateAndCorrelate(collectedFindings);
+
+            // 7. Risk Calculation
+            log.info("Risk calculated");
+            riskScoringService.calculateAndApplyStats(scan, deduplicated);
+
+            // 8. Assign findings and complete
+            log.info("Report generated");
             scan.setProgressPercent(100);
             scan.setCurrentStep("Assessment Completed Successfully");
+            scan.setStatus(ScanStatus.COMPLETED);
+            scan.setCompletedAt(LocalDateTime.now());
+
+            scan.getFindings().clear();
+            for (Finding f : deduplicated) {
+                scan.addFinding(f);
+            }
 
             scanRepository.save(scan);
             broadcastProgress(scan.getId(), 100, "Assessment Completed Successfully",
-                    allFindings.size(), scan.getSecurityScore(), ScanStatus.COMPLETED);
+                    deduplicated.size(), scan.getSecurityScore(), ScanStatus.COMPLETED);
 
         } catch (Exception e) {
+            log.error("Assessment failed: {}", e.getMessage(), e);
             scan.setStatus(ScanStatus.FAILED);
             scan.setCurrentStep("Assessment Error: " + e.getMessage());
             scanRepository.save(scan);
             broadcastProgress(scan.getId(), scan.getProgressPercent(), "Error: " + e.getMessage(),
-                    allFindings.size(), scan.getSecurityScore(), ScanStatus.FAILED);
+                    collectedFindings.size(), scan.getSecurityScore(), ScanStatus.FAILED);
+        }
+    }
+
+    private String extractDomain(String url) {
+        try {
+            java.net.URI uri = java.net.URI.create(url);
+            String host = uri.getHost();
+            return host != null ? host : url;
+        } catch (Exception e) {
+            return url;
         }
     }
 

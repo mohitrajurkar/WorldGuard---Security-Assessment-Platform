@@ -8,18 +8,25 @@ import java.util.List;
 import java.util.Map;
 
 public class DashboardSummaryDto {
-    private int overallSecurityScore;
+    private int overallSecurityScore = 100;
     private long totalScans;
     private long totalFindings;
+
+    private long verifiedCount;
+    private long needsReviewCount;
+    private long potentialCount;
+    private long informationalCount;
+
     private long criticalCount;
     private long highCount;
     private long mediumCount;
     private long lowCount;
     private long infoCount;
+
     private Map<String, Long> categoryDistribution = new HashMap<>();
     private List<Scan> recentScans;
     private List<Finding> topRiskFindings;
-    private String targetApp = "World Monitor (https://worldmonitor.app)";
+    private String targetApp = "World Monitor — Local (http://localhost:3000)";
 
     public DashboardSummaryDto() {}
 
@@ -45,6 +52,38 @@ public class DashboardSummaryDto {
 
     public void setTotalFindings(long totalFindings) {
         this.totalFindings = totalFindings;
+    }
+
+    public long getVerifiedCount() {
+        return verifiedCount;
+    }
+
+    public void setVerifiedCount(long verifiedCount) {
+        this.verifiedCount = verifiedCount;
+    }
+
+    public long getNeedsReviewCount() {
+        return needsReviewCount;
+    }
+
+    public void setNeedsReviewCount(long needsReviewCount) {
+        this.needsReviewCount = needsReviewCount;
+    }
+
+    public long getPotentialCount() {
+        return potentialCount;
+    }
+
+    public void setPotentialCount(long potentialCount) {
+        this.potentialCount = potentialCount;
+    }
+
+    public long getInformationalCount() {
+        return informationalCount;
+    }
+
+    public void setInformationalCount(long informationalCount) {
+        this.informationalCount = informationalCount;
     }
 
     public long getCriticalCount() {

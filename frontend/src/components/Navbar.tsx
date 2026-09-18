@@ -1,62 +1,87 @@
-import React from 'react';
-import { 
-  Shield, 
-  Search, 
-  History, 
-  AlertCircle, 
-  Terminal, 
-  Layers, 
-  FileText,
-  CheckCircle2
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Shield, LayoutDashboard, History, AlertTriangle, Terminal, Globe, FileText } from 'lucide-react';
+import { api, ScannersStatusResponse } from '../services/api';
 
-interface Props {
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
+interface NavbarProps {
+  currentTab: string;
+  onSelectTab: (tab: string) => void;
 }
 
-export const Navbar: React.FC<Props> = ({ activeTab, setActiveTab }) => {
+export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
+  const [scannerStatus, setScannerStatus] = useState<ScannersStatusResponse | null>(null);
+
+  useEffect(() => {
+    const fetchStatus = () => {
+      api.getScannerStatus()
+        .then(setScannerStatus)
+        .catch(() => {});
+    };
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   const navItems = [
-    { id: 'dashboard', label: 'Assessment Console', icon: <Search size={16} /> },
-    { id: 'scans', label: 'Audit History', icon: <History size={16} /> },
-    { id: 'findings', label: 'Security Findings', icon: <AlertCircle size={16} /> },
-    { id: 'api-tester', label: 'API Endpoint Probe', icon: <Terminal size={16} /> },
-    { id: 'architecture', label: 'System Overview', icon: <Layers size={16} /> },
-    { id: 'reports', label: 'Export Reports', icon: <FileText size={16} /> },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'scans', label: 'Scans', icon: History },
+    { id: 'findings', label: 'Findings', icon: AlertTriangle },
+    { id: 'api-scan', label: 'API Scan', icon: Terminal },
+    { id: 'external-intel', label: 'External Intelligence', icon: Globe },
+    { id: 'reports', label: 'Reports', icon: FileText },
   ];
 
   return (
-    <aside className="sidebar">
-      <div className="brand-box">
-        <div className="brand-icon">
-          <Shield size={18} />
+    <header className="navbar">
+      <div className="navbar-inner">
+        <div className="nav-brand" style={{ cursor: 'pointer' }} onClick={() => onSelectTab('dashboard')}>
+          <Shield size={24} />
+          <span>WorldGuard</span>
         </div>
-        <div>
-          <div className="brand-title">WM Security</div>
-          <div className="brand-badge">Audit Platform</div>
-        </div>
+
+        <nav className="nav-links">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = currentTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => onSelectTab(item.id)}
+                className={`nav-link ${isActive ? 'active' : ''}`}
+                style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+              >
+                <Icon size={16} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
-      <ul className="nav-menu">
-        {navItems.map((item) => (
-          <li
-            key={item.id}
-            className={`nav-item ${activeTab === item.id ? 'active' : ''}`}
-            onClick={() => setActiveTab(item.id)}
-          >
-            {item.icon}
-            <span>{item.label}</span>
-          </li>
-        ))}
-      </ul>
+      <div className="scanner-status-strip">
+        <div className="status-strip-inner">
+          <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Scanner Engine Status:</span>
+          
+          <div className="tool-indicator">
+            <span className={`status-dot ${scannerStatus?.semgrep?.available ? 'connected' : 'unavailable'}`} />
+            <span>Semgrep (Source): <strong>{scannerStatus?.semgrep?.available ? 'Connected' : 'Unavailable'}</strong></span>
+          </div>
 
-      <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid var(--border-subtle)', fontSize: '0.78rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', color: 'var(--success-color)', marginBottom: '0.2rem' }}>
-          <CheckCircle2 size={13} />
-          <span style={{ fontWeight: 500 }}>System Ready</span>
+          <div className="tool-indicator">
+            <span className={`status-dot ${scannerStatus?.zap?.available ? 'connected' : 'unavailable'}`} />
+            <span>OWASP ZAP (Dynamic): <strong>{scannerStatus?.zap?.available ? 'Connected' : 'Unavailable'}</strong></span>
+          </div>
+
+          <div className="tool-indicator">
+            <span className="status-dot connected" />
+            <span>API Scanner: <strong>Ready</strong></span>
+          </div>
+
+          <div className="tool-indicator">
+            <span className={`status-dot ${scannerStatus?.leakix?.available ? 'connected' : 'unavailable'}`} />
+            <span>LeakIX (OSINT): <strong>{scannerStatus?.leakix?.available ? 'Connected' : 'Unavailable'}</strong></span>
+          </div>
         </div>
-        <div style={{ color: 'var(--text-muted)' }}>Target: worldmonitor.app</div>
       </div>
-    </aside>
+    </header>
   );
 };

@@ -16,13 +16,13 @@ public class Scan {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private ScanType scanType;
+    private ScanType scanType = ScanType.COMPLETE;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private ScanStatus status;
+    private ScanStatus status = ScanStatus.PENDING;
 
-    private String targetUrl;
+    private String targetUrl = "http://localhost:3000";
     private String sourcePath;
 
     private LocalDateTime startedAt;
@@ -34,6 +34,11 @@ public class Scan {
     private int mediumCount;
     private int lowCount;
     private int infoCount;
+
+    private int verifiedCount;
+    private int needsReviewCount;
+    private int potentialCount;
+    private int informationalCount;
 
     private int progressPercent;
     private String currentStep;
@@ -148,6 +153,38 @@ public class Scan {
 
     public void setInfoCount(int infoCount) {
         this.infoCount = infoCount;
+    }
+
+    public int getVerifiedCount() {
+        return verifiedCount;
+    }
+
+    public void setVerifiedCount(int verifiedCount) {
+        this.verifiedCount = verifiedCount;
+    }
+
+    public int getNeedsReviewCount() {
+        return needsReviewCount;
+    }
+
+    public void setNeedsReviewCount(int needsReviewCount) {
+        this.needsReviewCount = needsReviewCount;
+    }
+
+    public int getPotentialCount() {
+        return potentialCount;
+    }
+
+    public void setPotentialCount(int potentialCount) {
+        this.potentialCount = potentialCount;
+    }
+
+    public int getInformationalCount() {
+        return informationalCount;
+    }
+
+    public void setInformationalCount(int informationalCount) {
+        this.informationalCount = informationalCount;
     }
 
     public int getProgressPercent() {

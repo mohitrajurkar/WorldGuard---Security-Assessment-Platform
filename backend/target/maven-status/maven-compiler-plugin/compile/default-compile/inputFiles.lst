@@ -3,6 +3,7 @@ D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\controller\D
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\controller\FindingController.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\controller\ReportController.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\controller\ScanController.java
+D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\controller\ScannerStatusController.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\dto\ApiProbeRequest.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\dto\ApiProbeResult.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\dto\DashboardSummaryDto.java
@@ -10,6 +11,7 @@ D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\dto\ScanProg
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\dto\ScanRequest.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\model\Finding.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\model\FindingCategory.java
+D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\model\FindingStatus.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\model\Report.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\model\Scan.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\model\ScanStatus.java
@@ -22,7 +24,13 @@ D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\SecurityPlat
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\service\ApiScannerService.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\service\DastScannerService.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\service\DemoDataSeeder.java
+D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\service\FindingDeduplicator.java
+D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\service\FindingNormalizer.java
+D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\service\LeakIXService.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\service\ReportGeneratorService.java
+D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\service\RiskScoringService.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\service\ScanOrchestratorService.java
+D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\service\SemgrepService.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\service\StaticAnalysisService.java
 D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\service\VulnerabilityEngine.java
+D:\SIH World monitor\backend\src\main\java\com\sih\securityplatform\service\ZapService.java

@@ -1,47 +1,68 @@
 import React from 'react';
-import { AlertOctagon, AlertTriangle, AlertCircle, Info, CheckCircle2 } from 'lucide-react';
+import { FindingStatus } from '../services/api';
 
-interface Props {
-  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
-  plainLanguage?: boolean;
+interface SeverityBadgeProps {
+  severity?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
+  status?: FindingStatus;
 }
 
-export const SeverityBadge: React.FC<Props> = ({ severity, plainLanguage = false }) => {
-  const getIcon = () => {
-    switch (severity) {
-      case 'CRITICAL': return <AlertOctagon size={12} />;
-      case 'HIGH': return <AlertTriangle size={12} />;
-      case 'MEDIUM': return <AlertCircle size={12} />;
-      case 'LOW': return <Info size={12} />;
-      case 'INFO': return <CheckCircle2 size={12} />;
-    }
-  };
+export const SeverityBadge: React.FC<SeverityBadgeProps> = ({ severity, status }) => {
+  if (status) {
+    let className = 'badge badge-potential';
+    let label: string = status;
 
-  const getStyleClass = () => {
-    switch (severity) {
-      case 'CRITICAL': return 'badge badge-urgent';
-      case 'HIGH': return 'badge badge-warning';
-      case 'MEDIUM': return 'badge badge-info';
-      case 'LOW': return 'badge badge-neutral';
-      case 'INFO': return 'badge badge-neutral';
+    switch (status) {
+      case 'VERIFIED':
+        className = 'badge badge-verified';
+        label = 'VERIFIED';
+        break;
+      case 'NEEDS_REVIEW':
+        className = 'badge badge-review';
+        label = 'NEEDS REVIEW';
+        break;
+      case 'POTENTIAL':
+        className = 'badge badge-potential';
+        label = 'POTENTIAL';
+        break;
+      case 'EXTERNAL_INTELLIGENCE':
+        className = 'badge badge-info';
+        label = 'EXTERNAL INTEL';
+        break;
+      case 'FALSE_POSITIVE':
+        className = 'badge badge-info';
+        label = 'FALSE POSITIVE';
+        break;
+      case 'INFORMATIONAL':
+        className = 'badge badge-info';
+        label = 'INFO';
+        break;
     }
-  };
 
-  const getLabel = () => {
-    if (!plainLanguage) return severity;
+    return <span className={className}>{label}</span>;
+  }
+
+  if (severity) {
+    let className = 'badge badge-info';
     switch (severity) {
-      case 'CRITICAL': return 'Urgent Action';
-      case 'HIGH': return 'High Priority';
-      case 'MEDIUM': return 'Recommended';
-      case 'LOW': return 'Minor Note';
-      case 'INFO': return 'Observation';
+      case 'CRITICAL':
+        className = 'badge badge-critical';
+        break;
+      case 'HIGH':
+        className = 'badge badge-high';
+        break;
+      case 'MEDIUM':
+        className = 'badge badge-medium';
+        break;
+      case 'LOW':
+        className = 'badge badge-low';
+        break;
+      case 'INFO':
+        className = 'badge badge-info';
+        break;
     }
-  };
 
-  return (
-    <span className={getStyleClass()}>
-      {getIcon()}
-      {getLabel()}
-    </span>
-  );
+    return <span className={className}>{severity}</span>;
+  }
+
+  return null;
 };

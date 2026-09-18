@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { api, Scan } from '../services/api';
-import { PlusCircle, RefreshCw, Eye, Trash2, ShieldCheck, Clock } from 'lucide-react';
+import { Play, RefreshCw, Trash2, ArrowRight } from 'lucide-react';
 
-interface Props {
+interface ScansListProps {
   onNavigate: (tab: string, scanId?: number) => void;
 }
 
-export const ScansList: React.FC<Props> = ({ onNavigate }) => {
+export const ScansList: React.FC<ScansListProps> = ({ onNavigate }) => {
   const [scans, setScans] = useState<Scan[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -15,8 +15,8 @@ export const ScansList: React.FC<Props> = ({ onNavigate }) => {
     try {
       const list = await api.getScans();
       setScans(list);
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error(e);
     } finally {
       setLoading(false);
     }
@@ -26,135 +26,133 @@ export const ScansList: React.FC<Props> = ({ onNavigate }) => {
     loadScans();
   }, []);
 
-  const handleDelete = async (id: number) => {
-    if (!confirm(`Delete scan #${id}?`)) return;
+  const handleDelete = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!window.confirm(`Delete assessment #${id}?`)) return;
     try {
       await api.deleteScan(id);
       loadScans();
     } catch (err) {
-      console.error(err);
+      alert('Failed to delete assessment');
     }
   };
 
   return (
     <div>
-      <div className="page-header">
+      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 className="page-title">Assessment Scans</h1>
-          <p className="page-subtitle">Security analysis execution history across static, dynamic, and API engines</p>
+          <h1 className="page-title">Security Assessments History</h1>
+          <p className="page-subtitle">
+            Chronological audit log of all security evaluations conducted against authorized targets.
+          </p>
         </div>
+
         <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button onClick={loadScans} className="btn btn-secondary">
-            <RefreshCw size={16} /> Refresh
+          <button onClick={() => onNavigate('new-scan')} className="btn btn-primary btn-sm">
+            <Play size={14} />
+            <span>New Assessment</span>
           </button>
-          <button onClick={() => onNavigate('new-scan')} className="btn btn-primary">
-            <PlusCircle size={16} /> Launch New Scan
+          <button onClick={loadScans} className="btn btn-outline btn-sm">
+            <RefreshCw size={14} />
           </button>
         </div>
       </div>
 
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '3rem' }}>
-          <RefreshCw size={32} className="animate-spin" color="var(--accent-sky)" />
-        </div>
-      ) : scans.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '3rem' }}>
-          <ShieldCheck size={48} color="var(--accent-sky)" style={{ margin: '0 auto 1rem' }} />
-          <h3>No Scans Executed Yet</h3>
-          <p style={{ color: 'var(--text-secondary)', margin: '1rem 0' }}>
-            Trigger your first security scan against the World Monitor application.
-          </p>
-          <button onClick={() => onNavigate('new-scan')} className="btn btn-primary">
-            Start First Scan
-          </button>
-        </div>
-      ) : (
-        <div className="card">
-          <div className="data-table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Scan ID</th>
-                  <th>Assessment Mode</th>
-                  <th>Target URL</th>
-                  <th>Execution Time</th>
-                  <th>Status</th>
-                  <th>Security Score</th>
-                  <th>Severity Breakdown</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scans.map((s) => (
-                  <tr key={s.id}>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 700 }}>#{s.id}</td>
-                    <td>
-                      <span className="badge badge-info">{s.scanType}</span>
-                      {s.isDemo && <span className="badge badge-medium" style={{ marginLeft: 6 }}>BASELINE</span>}
-                    </td>
-                    <td style={{ maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div className="table-wrapper">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Target</th>
+              <th>Scan Type</th>
+              <th>Security Score</th>
+              <th>Verified Issues</th>
+              <th>Status</th>
+              <th style={{ textAlign: 'right' }}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={7} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                  Loading assessments...
+                </td>
+              </tr>
+            ) : scans.length > 0 ? (
+              scans.map((s) => (
+                <tr
+                  key={s.id}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => onNavigate('scans', s.id)}
+                >
+                  <td>
+                    {new Date(s.startedAt).toLocaleDateString('en-GB', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric'
+                    })}
+                  </td>
+                  <td>
+                    <strong style={{ color: 'var(--text-main)' }}>
+                      {s.targetUrl.includes('localhost') ? 'World Monitor Local' : 'World Monitor'}
+                    </strong>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
                       {s.targetUrl}
-                    </td>
-                    <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Clock size={12} />
-                        {new Date(s.startedAt).toLocaleString()}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={
-                        s.status === 'COMPLETED' ? 'badge badge-success' : 
-                        s.status === 'RUNNING' ? 'badge badge-medium' : 
-                        'badge badge-critical'
-                      }>
-                        {s.status}
-                      </span>
-                    </td>
-                    <td>
-                      <span style={{ 
-                        fontWeight: 800, 
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '1rem',
-                        color: s.securityScore >= 80 ? 'var(--success-color)' : s.securityScore >= 55 ? 'var(--med-color)' : 'var(--crit-color)' 
-                      }}>
-                        {s.securityScore} / 100
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.4rem', fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }}>
-                        <span style={{ color: 'var(--crit-color)' }}>{s.criticalCount}C</span>
-                        <span style={{ color: 'var(--high-color)' }}>{s.highCount}H</span>
-                        <span style={{ color: 'var(--med-color)' }}>{s.mediumCount}M</span>
-                        <span style={{ color: 'var(--low-color)' }}>{s.lowCount}L</span>
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button 
-                          onClick={() => onNavigate('scan-detail', s.id)}
-                          className="btn btn-secondary"
-                          style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem' }}
-                          title="View Scan Details"
-                        >
-                          <Eye size={14} /> View
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(s.id)}
-                          className="btn btn-danger"
-                          style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem' }}
-                          title="Delete Scan"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+                    </div>
+                  </td>
+                  <td>
+                    <span style={{ fontWeight: 500 }}>{s.scanType}</span>
+                  </td>
+                  <td>
+                    <strong style={{ fontSize: '1rem', color: s.securityScore >= 80 ? '#16a34a' : s.securityScore >= 60 ? '#d97706' : '#dc2626' }}>
+                      {s.securityScore}
+                    </strong>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}> / 100</span>
+                  </td>
+                  <td>
+                    <span className={s.verifiedCount > 0 ? 'badge badge-verified' : 'badge badge-info'}>
+                      {s.verifiedCount}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={s.status === 'COMPLETED' ? 'badge badge-info' : s.status === 'RUNNING' ? 'badge badge-review' : 'badge badge-critical'}>
+                      {s.status}
+                    </span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <div style={{ display: 'inline-flex', gap: '0.5rem' }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onNavigate('scans', s.id);
+                        }}
+                        className="btn btn-outline btn-sm"
+                      >
+                        <span>View</span>
+                        <ArrowRight size={12} />
+                      </button>
+                      <button
+                        onClick={(e) => handleDelete(s.id, e)}
+                        className="btn btn-outline btn-sm"
+                        style={{ color: 'var(--crit-color)' }}
+                        title="Delete"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan={7} style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
+                  No security assessments have been run yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
