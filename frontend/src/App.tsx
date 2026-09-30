@@ -5,58 +5,55 @@ import { ScansList } from './pages/ScansList';
 import { NewScan } from './pages/NewScan';
 import { ScanDetail } from './pages/ScanDetail';
 import { FindingsList } from './pages/FindingsList';
-import { ApiTester } from './pages/ApiTester';
-import { ExternalIntelligence } from './pages/ExternalIntelligence';
 import { Reports } from './pages/Reports';
+import { ApiTester } from './pages/ApiTester';
+
+export type Tab = 'dashboard' | 'scans' | 'new-scan' | 'findings' | 'reports' | 'api-tester';
 
 export const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [tab, setTab] = useState<Tab>('dashboard');
   const [selectedScanId, setSelectedScanId] = useState<number | null>(null);
 
-  const handleNavigate = (tab: string, scanId?: number) => {
+  const navigate = (next: string, scanId?: number) => {
     if (scanId !== undefined) {
       setSelectedScanId(scanId);
     }
-    setActiveTab(tab);
+    setTab(next as Tab);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'dashboard':
-        return <Dashboard onNavigate={handleNavigate} />;
+  const openScan = (scanId: number) => navigate('scans', scanId);
+
+  const content = () => {
+    switch (tab) {
       case 'scans':
-        if (selectedScanId !== null) {
-          return <ScanDetail scanId={selectedScanId} onNavigate={handleNavigate} />;
-        }
-        return <ScansList onNavigate={handleNavigate} />;
+        return selectedScanId !== null
+          ? <ScanDetail scanId={selectedScanId} onNavigate={navigate} onDeleted={() => setSelectedScanId(null)} />
+          : <ScansList onNavigate={navigate} onOpenScan={openScan} />;
       case 'new-scan':
-        return <NewScan onNavigate={handleNavigate} />;
+        return <NewScan onNavigate={navigate} onStarted={openScan} />;
       case 'findings':
         return <FindingsList />;
-      case 'api-scan':
-        return <ApiTester />;
-      case 'external-intel':
-        return <ExternalIntelligence />;
       case 'reports':
-        return <Reports />;
+        return <Reports onOpenScan={openScan} />;
+      case 'api-tester':
+        return <ApiTester />;
+      case 'dashboard':
       default:
-        return <Dashboard onNavigate={handleNavigate} />;
+        return <Dashboard onNavigate={navigate} />;
     }
   };
 
   return (
     <div className="app-container">
       <Navbar
-        currentTab={activeTab === 'new-scan' ? 'scans' : activeTab}
-        onSelectTab={(tab) => {
+        currentTab={tab === 'new-scan' ? 'scans' : tab}
+        onSelectTab={(next) => {
           setSelectedScanId(null);
-          setActiveTab(tab);
+          setTab(next as Tab);
         }}
       />
-      <main className="main-content">
-        {renderContent()}
-      </main>
+      <main className="main-content">{content()}</main>
     </div>
   );
 };

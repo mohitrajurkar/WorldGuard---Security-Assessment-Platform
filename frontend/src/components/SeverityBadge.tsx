@@ -1,68 +1,45 @@
 import React from 'react';
-import { FindingStatus } from '../services/api';
+import { Severity as SeverityType, FindingStatus } from '../services/api';
 
-interface SeverityBadgeProps {
-  severity?: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
-  status?: FindingStatus;
-}
+const SEVERITY_CLASS: Record<string, string> = {
+  CRITICAL: 'badge-critical',
+  HIGH: 'badge-high',
+  MEDIUM: 'badge-medium',
+  LOW: 'badge-low',
+  INFO: 'badge-info',
+  UNKNOWN: 'badge-info',
+};
 
-export const SeverityBadge: React.FC<SeverityBadgeProps> = ({ severity, status }) => {
-  if (status) {
-    let className = 'badge badge-potential';
-    let label: string = status;
+const STATUS_CLASS: Record<FindingStatus, string> = {
+  VERIFIED: 'badge-verified',
+  NEEDS_REVIEW: 'badge-review',
+  EXTERNAL_INTELLIGENCE: 'badge-review',
+  POTENTIAL: 'badge-potential',
+  FALSE_POSITIVE: 'badge-info',
+  INFORMATIONAL: 'badge-info',
+};
 
-    switch (status) {
-      case 'VERIFIED':
-        className = 'badge badge-verified';
-        label = 'VERIFIED';
-        break;
-      case 'NEEDS_REVIEW':
-        className = 'badge badge-review';
-        label = 'NEEDS REVIEW';
-        break;
-      case 'POTENTIAL':
-        className = 'badge badge-potential';
-        label = 'POTENTIAL';
-        break;
-      case 'EXTERNAL_INTELLIGENCE':
-        className = 'badge badge-info';
-        label = 'EXTERNAL INTEL';
-        break;
-      case 'FALSE_POSITIVE':
-        className = 'badge badge-info';
-        label = 'FALSE POSITIVE';
-        break;
-      case 'INFORMATIONAL':
-        className = 'badge badge-info';
-        label = 'INFO';
-        break;
-    }
+const STATUS_LABEL: Record<FindingStatus, string> = {
+  VERIFIED: 'Verified',
+  NEEDS_REVIEW: 'Needs review',
+  EXTERNAL_INTELLIGENCE: 'External intel',
+  POTENTIAL: 'Potential',
+  FALSE_POSITIVE: 'False positive',
+  INFORMATIONAL: 'Informational',
+};
 
-    return <span className={className}>{label}</span>;
-  }
+/** Renders a finding's severity or triage status as a coloured pill. */
+export const SeverityBadge: React.FC<{ value: SeverityType | FindingStatus; kind?: 'severity' | 'status' }> = ({
+  value,
+  kind = 'severity',
+}) => {
+  const isStatus = kind === 'status' || value in STATUS_CLASS;
+  const cls = isStatus
+    ? STATUS_CLASS[value as FindingStatus]
+    : SEVERITY_CLASS[value] ?? 'badge-info';
+  const label = isStatus
+    ? STATUS_LABEL[value as FindingStatus]
+    : value.charAt(0) + value.slice(1).toLowerCase();
 
-  if (severity) {
-    let className = 'badge badge-info';
-    switch (severity) {
-      case 'CRITICAL':
-        className = 'badge badge-critical';
-        break;
-      case 'HIGH':
-        className = 'badge badge-high';
-        break;
-      case 'MEDIUM':
-        className = 'badge badge-medium';
-        break;
-      case 'LOW':
-        className = 'badge badge-low';
-        break;
-      case 'INFO':
-        className = 'badge badge-info';
-        break;
-    }
-
-    return <span className={className}>{severity}</span>;
-  }
-
-  return null;
+  return <span className={`badge ${cls}`}>{label}</span>;
 };

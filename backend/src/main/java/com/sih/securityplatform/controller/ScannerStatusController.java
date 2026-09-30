@@ -1,68 +1,73 @@
 package com.sih.securityplatform.controller;
 
 import com.sih.securityplatform.service.ApiScannerService;
-import com.sih.securityplatform.service.LeakIXService;
-import com.sih.securityplatform.service.SemgrepService;
-import com.sih.securityplatform.service.ZapService;
+import com.sih.securityplatform.service.ScanDurationService;
+import com.sih.securityplatform.service.StaticAnalysisService;
+import com.sih.securityplatform.service.pentest.PentestSuiteClient;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * Reports the real availability of the engines that actually perform scans.
+ *
+ * <p>Previously this endpoint advertised ZAP and LeakIX, neither of which was ever invoked, and
+ * hardcoded the API scanner as available. It now reports only engines that a scan can route to.
+ */
 @RestController
 @RequestMapping("/api/scanners")
 @CrossOrigin(origins = "*")
 public class ScannerStatusController {
 
-    private final SemgrepService semgrepService;
-    private final ZapService zapService;
+    private final PentestSuiteClient pentestSuiteClient;
+    private final StaticAnalysisService staticAnalysisService;
     private final ApiScannerService apiScannerService;
-    private final LeakIXService leakIXService;
+    private final ScanDurationService durationService;
 
-    public ScannerStatusController(
-            SemgrepService semgrepService,
-            ZapService zapService,
-            ApiScannerService apiScannerService,
-            LeakIXService leakIXService) {
-        this.semgrepService = semgrepService;
-        this.zapService = zapService;
+    public ScannerStatusController(PentestSuiteClient pentestSuiteClient,
+                                   StaticAnalysisService staticAnalysisService,
+                                   ApiScannerService apiScannerService,
+                                   ScanDurationService durationService) {
+        this.pentestSuiteClient = pentestSuiteClient;
+        this.staticAnalysisService = staticAnalysisService;
         this.apiScannerService = apiScannerService;
-        this.leakIXService = leakIXService;
+        this.durationService = durationService;
     }
 
     @GetMapping("/status")
     public Map<String, Object> getScannersStatus() {
-        Map<String, Object> response = new HashMap<>();
+        Map<String, Object> response = new LinkedHashMap<>();
 
-        Map<String, Object> semgrep = new HashMap<>();
-        boolean semgrepAvail = semgrepService.isAvailable();
-        semgrep.put("available", semgrepAvail);
-        semgrep.put("version", semgrepService.getVersion());
-        semgrep.put("label", "Source Code Security (SAST)");
-        response.put("semgrep", semgrep);
+        boolean suiteUp = pentestSuiteClient.isAvailable();
+        Map<String, Object> dynamic = new LinkedHashMap<>();
+        dynamic.put("available", suiteUp);
+        dynamic.put("label", "Dynamic Engine (Pentest Suite)");
+        dynamic.put("endpoint", pentestSuiteClient.baseUrl());
+        dynamic.put("version", "2.0.0");
+        response.put("dynamic", dynamic);
 
-        Map<String, Object> zap = new HashMap<>();
-        boolean zapAvail = zapService.isAvailable();
-        zap.put("available", zapAvail);
-        zap.put("label", "Running Application Security (DAST)");
-        zap.put("endpoint", "http://localhost:8090");
-        response.put("zap", zap);
+        boolean semgrep = staticAnalysisService.isSemgrepAvailable();
+        boolean git = staticAnalysisService.isGitAvailable();
+        Map<String, Object> staticScan = new LinkedHashMap<>();
+        // Static analysis is only truly available if we can fetch the repo at all.
+        staticScan.put("available", git);
+        staticScan.put("semgrepAvailable", semgrep);
+        staticScan.put("gitAvailable", git);
+        staticScan.put("version", semgrep ? staticAnalysisService.getSemgrepVersion() : "built-in engine");
+        staticScan.put("label", "Static Engine (Source Analysis)");
+        staticScan.put("repository", staticAnalysisService.getRepositoryUrl());
+        response.put("static", staticScan);
 
-        Map<String, Object> apiScanner = new HashMap<>();
-        apiScanner.put("available", true);
-        apiScanner.put("label", "API & Defensive Header Engine");
-        response.put("apiScanner", apiScanner);
+        Map<String, Object> api = new LinkedHashMap<>();
+        api.put("available", apiScannerService.isReady());
+        api.put("label", "API Probe Engine");
+        response.put("apiProbe", api);
 
-        Map<String, Object> leakix = new HashMap<>();
-        boolean leakConfigured = leakIXService.isConfigured();
-        leakix.put("available", leakConfigured);
-        leakix.put("configured", leakConfigured);
-        leakix.put("label", "External Security Intelligence (OSINT)");
-        response.put("leakix", leakix);
-
+        response.put("estimates", durationService.allEstimates().get("estimates"));
         return response;
     }
 }

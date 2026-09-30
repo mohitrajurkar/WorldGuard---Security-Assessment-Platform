@@ -2,12 +2,17 @@ package com.sih.securityplatform.model;
 
 public enum FindingCategory {
     AUTHENTICATION,
+    AUTHORIZATION,
     INJECTION,
     INFORMATION_DISCLOSURE,
+    CRYPTOGRAPHY,
     CORS,
     RATE_LIMITING,
     SECURITY_HEADERS,
     SSRF,
     CONFIGURATION,
+    API_SECURITY,
+    DEPENDENCY,
+    DATA_EXPOSURE,
     CODE_QUALITY
 }

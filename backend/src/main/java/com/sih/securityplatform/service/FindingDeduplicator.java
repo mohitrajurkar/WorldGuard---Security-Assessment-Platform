@@ -1,75 +1,88 @@
 package com.sih.securityplatform.service;
 
 import com.sih.securityplatform.model.Finding;
-import com.sih.securityplatform.model.FindingStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
+/**
+ * Collapses findings that describe the same problem.
+ *
+ * <p>The same weak pattern is frequently reported by more than one engine, or several times
+ * within one engine (for example the same secret pattern on a re-scanned file). Deduplication is
+ * keyed on the SHA-256 fingerprint assigned during normalisation, and duplicate hits are merged
+ * rather than dropped so no evidence is lost.
+ */
 @Service
 public class FindingDeduplicator {
 
-    public List<Finding> deduplicateAndCorrelate(List<Finding> rawFindings) {
+    private static final Logger log = LoggerFactory.getLogger(FindingDeduplicator.class);
+
+    public List<Finding> deduplicate(List<Finding> rawFindings) {
         if (rawFindings == null || rawFindings.isEmpty()) {
             return Collections.emptyList();
         }
 
         Map<String, Finding> uniqueMap = new LinkedHashMap<>();
+        int duplicates = 0;
 
         for (Finding current : rawFindings) {
+            if (current == null) {
+                continue;
+            }
             String fp = current.getFingerprint();
+
             if (fp == null || fp.isBlank()) {
-                uniqueMap.put(UUID.randomUUID().toString(), current);
+                // No fingerprint yet — keep it, but make sure it cannot collide with a real one.
+                uniqueMap.put("nofp:" + UUID.randomUUID(), current);
                 continue;
             }
 
-            if (!uniqueMap.containsKey(fp)) {
+            Finding existing = uniqueMap.get(fp);
+            if (existing == null) {
                 uniqueMap.put(fp, current);
             } else {
-                // If existing finding has less evidence, merge info
-                Finding existing = uniqueMap.get(fp);
-                if ((existing.getEvidence() == null || existing.getEvidence().isBlank()) && current.getEvidence() != null) {
-                    existing.setEvidence(current.getEvidence());
-                }
+                duplicates++;
+                merge(existing, current);
             }
         }
 
-        List<Finding> list = new ArrayList<>(uniqueMap.values());
-
-        // Perform cross-layer correlation between Static (Semgrep) and Dynamic (API/ZAP)
-        correlateStaticAndDynamic(list);
-
-        return list;
+        if (duplicates > 0) {
+            log.info("Deduplication merged {} duplicate finding(s) by fingerprint", duplicates);
+        }
+        return new ArrayList<>(uniqueMap.values());
     }
 
-    private void correlateStaticAndDynamic(List<Finding> findings) {
-        for (int i = 0; i < findings.size(); i++) {
-            Finding f1 = findings.get(i);
-            for (int j = i + 1; j < findings.size(); j++) {
-                Finding f2 = findings.get(j);
-
-                boolean oneIsStatic = "Semgrep".equalsIgnoreCase(f1.getSource());
-                boolean twoIsStatic = "Semgrep".equalsIgnoreCase(f2.getSource());
-
-                if (oneIsStatic != twoIsStatic) {
-                    // One is static, one is dynamic
-                    boolean sameCategory = f1.getCategory() == f2.getCategory();
-                    boolean corsMatch = f1.getTitle().toLowerCase().contains("cors") && f2.getTitle().toLowerCase().contains("cors");
-                    boolean headerMatch = f1.getTitle().toLowerCase().contains("header") && f2.getTitle().toLowerCase().contains("header");
-
-                    if (sameCategory && (corsMatch || headerMatch)) {
-                        Finding base = oneIsStatic ? f2 : f1;
-                        Finding counterpart = oneIsStatic ? f1 : f2;
-
-                        base.setSource("Semgrep + " + base.getSource());
-                        base.setStatus(FindingStatus.VERIFIED);
-                        base.setWhyDoesItMatter(base.getWhyDoesItMatter() + " (Correlated: Source inspection and running behavior both confirm this issue).");
-
-                        findings.remove(j);
-                        j--;
-                    }
-                }
-            }
+    /** Fills gaps in the kept finding from the duplicate, without overwriting existing detail. */
+    private void merge(Finding target, Finding duplicate) {
+        if (isBlank(target.getEvidence()) && !isBlank(duplicate.getEvidence())) {
+            target.setEvidence(duplicate.getEvidence());
         }
+        if (isBlank(target.getPoc()) && !isBlank(duplicate.getPoc())) {
+            target.setPoc(duplicate.getPoc());
+        }
+        if (isBlank(target.getHttpRequest()) && !isBlank(duplicate.getHttpRequest())) {
+            target.setHttpRequest(duplicate.getHttpRequest());
+        }
+        if (isBlank(target.getHttpResponse()) && !isBlank(duplicate.getHttpResponse())) {
+            target.setHttpResponse(duplicate.getHttpResponse());
+        }
+        if (isBlank(target.getRecommendation()) && !isBlank(duplicate.getRecommendation())) {
+            target.setRecommendation(duplicate.getRecommendation());
+        }
+        if (target.getCvssScore() == null && duplicate.getCvssScore() != null) {
+            target.setCvssScore(duplicate.getCvssScore());
+        }
+    }
+
+    private boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 }

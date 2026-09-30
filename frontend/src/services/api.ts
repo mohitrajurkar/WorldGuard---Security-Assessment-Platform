@@ -1,3 +1,7 @@
+export type ScanType = 'SAST' | 'DAST' | 'API_SECURITY' | 'COMPLETE';
+export type ScanStatus = 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+export type ScanProfile = 'QUICK' | 'STANDARD' | 'DEEP' | 'FULL';
+
 export type FindingStatus =
   | 'POTENTIAL'
   | 'NEEDS_REVIEW'
@@ -6,15 +10,23 @@ export type FindingStatus =
   | 'INFORMATIONAL'
   | 'EXTERNAL_INTELLIGENCE';
 
+export type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO' | 'UNKNOWN';
+
 export interface Scan {
   id: number;
-  scanType: 'COMPLETE' | 'SAST' | 'DAST' | 'API_SECURITY';
-  status: 'PENDING' | 'RUNNING' | 'COMPLETED' | 'FAILED';
+  scanType: ScanType;
+  status: ScanStatus;
   targetUrl: string;
   sourcePath?: string;
   startedAt: string;
   completedAt?: string;
   securityScore: number;
+  profile?: string;
+  authorizedAssessment: boolean;
+
+  externalScanner?: string;
+  externalScanId?: string;
+  rawResultLocation?: string;
 
   verifiedCount: number;
   needsReviewCount: number;
@@ -30,6 +42,8 @@ export interface Scan {
   progressPercent: number;
   currentStep: string;
   isDemo: boolean;
+  errorCode?: string;
+  errorMessage?: string;
   findings?: Finding[];
 }
 
@@ -37,13 +51,17 @@ export interface Finding {
   id: number;
   scanId: number;
   title: string;
-  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
+  severity: Severity;
   category: string;
   source: string;
+  scanner?: string;
+  externalFindingId?: string;
+  target?: string;
   endpoint?: string;
+  method?: string;
+  parameter?: string;
   filePath?: string;
   lineNumber?: number;
-  affectedComponent?: string;
 
   whatIsTheIssue?: string;
   whyDoesItMatter?: string;
@@ -52,9 +70,13 @@ export interface Finding {
   evidence: string;
   recommendation: string;
   reproductionSteps?: string;
+  poc?: string;
+  httpRequest?: string;
+  httpResponse?: string;
   rawTechnicalDetails?: string;
 
   cwe?: string;
+  owaspCategory?: string;
   cvssScore?: number;
   fingerprint?: string;
   status: FindingStatus;
@@ -65,180 +87,164 @@ export interface DashboardSummary {
   overallSecurityScore: number;
   totalScans: number;
   totalFindings: number;
-
   verifiedCount: number;
   needsReviewCount: number;
   potentialCount: number;
   informationalCount: number;
-
   criticalCount: number;
   highCount: number;
   mediumCount: number;
   lowCount: number;
   infoCount: number;
-
   categoryDistribution: Record<string, number>;
   recentScans: Scan[];
   topRiskFindings: Finding[];
   targetApp: string;
 }
 
-export interface ScannerToolStatus {
+export interface EngineStatus {
   available: boolean;
   label: string;
   version?: string;
   endpoint?: string;
-  configured?: boolean;
+  repository?: string;
+  semgrepAvailable?: boolean;
+  gitAvailable?: boolean;
 }
 
+/** type -> profile -> estimated seconds */
+export type EstimateMap = Record<string, Record<string, number>>;
+
 export interface ScannersStatusResponse {
-  semgrep: ScannerToolStatus;
-  zap: ScannerToolStatus;
-  apiScanner: ScannerToolStatus;
-  leakix: ScannerToolStatus;
+  dynamic?: EngineStatus;
+  static?: EngineStatus;
+  apiProbe?: EngineStatus;
+  estimates?: EstimateMap;
 }
 
 export interface ApiProbeResult {
   url: string;
   method: string;
-  status: number;
-  statusText: string;
-  durationMs: number;
-  headers: Record<string, string>;
-  bodySnippet: string;
-  securityHeadersScore: number;
-  missingHeaders: string[];
-  findingsDetected: string[];
   statusCode: number;
+  statusText: string;
   responseTimeMs: number;
   responseHeaders: Record<string, string>;
   responseBody: string;
+  securityHeadersScore: number;
   securityAlerts: string[];
   positiveControls: string[];
-  securityGradeScore: number;
+  missingHeaders?: string[];
 }
 
 export interface CreateScanPayload {
-  scanType: string;
+  scanType: ScanType;
   targetUrl: string;
-  sourcePath?: string;
-  enableSemgrep?: boolean;
-  enableApiSecurity?: boolean;
-  enableZap?: boolean;
-  enableLeakix?: boolean;
-  authorizedDomain?: string;
-  authorizedConfirmation?: boolean;
-  isDemo?: boolean;
+  scanProfile: ScanProfile;
+  authorizedConfirmation: boolean;
+}
+
+export interface ReportSummary {
+  scanId: number;
+  scanType: ScanType;
+  targetUrl: string;
+  profile: string;
+  securityScore: number;
+  verifiedCount: number;
+  criticalCount: number;
+  highCount: number;
+  completedAt: string;
+  downloadUrl: string;
 }
 
 const BASE_URL = '';
 
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, init);
+  if (!res.ok) {
+    // The API returns a structured error body; surface the server's reason when it has one.
+    let message = `Request failed (${res.status})`;
+    try {
+      const body = await res.json();
+      if (body?.message) message = body.message;
+      else if (body?.error) message = body.error;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new Error(message);
+  }
+  if (res.status === 204) return undefined as T;
+  return (await res.json()) as T;
+}
+
 export const api = {
-  async getDashboard(): Promise<DashboardSummary> {
-    const res = await fetch(`${BASE_URL}/api/dashboard`);
-    if (!res.ok) throw new Error('Failed to fetch dashboard summary');
-    return res.json();
-  },
+  getDashboard: () => request<DashboardSummary>('/api/dashboard'),
 
-  async getScannerStatus(): Promise<ScannersStatusResponse> {
-    const res = await fetch(`${BASE_URL}/api/scanners/status`);
-    if (!res.ok) throw new Error('Failed to fetch scanner statuses');
-    return res.json();
-  },
+  getScannerStatus: () => request<ScannersStatusResponse>('/api/scanners/status'),
 
-  async getScans(): Promise<Scan[]> {
-    const res = await fetch(`${BASE_URL}/api/scans`);
-    if (!res.ok) throw new Error('Failed to fetch scans');
-    return res.json();
-  },
+  getScans: () => request<Scan[]>('/api/scans'),
 
-  async getScan(id: number): Promise<Scan> {
-    const res = await fetch(`${BASE_URL}/api/scans/${id}`);
-    if (!res.ok) throw new Error('Failed to fetch scan detail');
-    return res.json();
-  },
+  getScan: (id: number) => request<Scan>(`/api/scans/${id}`),
 
-  async createScan(data: CreateScanPayload): Promise<Scan> {
-    const res = await fetch(`${BASE_URL}/api/scans`, {
+  createScan: (data: CreateScanPayload) =>
+    request<Scan>('/api/scans', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error('Failed to start scan');
-    return res.json();
-  },
+    }),
 
-  async deleteScan(id: number): Promise<void> {
+  deleteScan: async (id: number) => {
     const res = await fetch(`${BASE_URL}/api/scans/${id}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Failed to delete scan');
+    if (!res.ok) throw new Error('Failed to delete assessment');
   },
 
-  async getFindings(filters?: { scanId?: number; severity?: string; category?: string; status?: string }): Promise<Finding[]> {
+  getFindings: (filters?: {
+    scanId?: number;
+    severity?: string;
+    category?: string;
+    status?: string;
+  }) => {
     const params = new URLSearchParams();
-    if (filters?.scanId) params.append('scanId', filters.scanId.toString());
+    if (filters?.scanId) params.append('scanId', String(filters.scanId));
     if (filters?.severity) params.append('severity', filters.severity);
     if (filters?.category) params.append('category', filters.category);
     if (filters?.status) params.append('status', filters.status);
-
-    const url = `${BASE_URL}/api/findings${params.toString() ? '?' + params.toString() : ''}`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Failed to fetch findings');
-    return res.json();
+    const qs = params.toString();
+    return request<Finding[]>(`/api/findings${qs ? `?${qs}` : ''}`);
   },
 
-  async updateFindingStatus(id: number, status: string): Promise<Finding> {
-    const res = await fetch(`${BASE_URL}/api/findings/${id}/status`, {
+  updateFindingStatus: (id: number, status: FindingStatus) =>
+    request<Finding>(`/api/findings/${id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
-    });
-    if (!res.ok) throw new Error('Failed to update finding status');
-    return res.json();
-  },
+    }),
 
-  async probeEndpoint(data: { method: string; url: string; headers?: Record<string, string>; body?: string }): Promise<ApiProbeResult> {
-    const res = await fetch(`${BASE_URL}/api/probe`, {
+  probeEndpoint: (data: { method: string; url: string; headers?: Record<string, string>; body?: string }) =>
+    request<ApiProbeResult>('/api/probe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
-    });
-    if (!res.ok) throw new Error('Probe request failed');
-    const raw = await res.json();
-    return {
-      url: data.url,
-      method: data.method,
-      status: raw.status ?? raw.statusCode ?? 200,
-      statusCode: raw.statusCode ?? raw.status ?? 200,
-      statusText: raw.statusText ?? 'OK',
-      durationMs: raw.durationMs ?? raw.responseTimeMs ?? 0,
-      responseTimeMs: raw.responseTimeMs ?? raw.durationMs ?? 0,
-      headers: raw.headers ?? raw.responseHeaders ?? {},
-      responseHeaders: raw.responseHeaders ?? raw.headers ?? {},
-      bodySnippet: raw.bodySnippet ?? raw.responseBody ?? '',
-      responseBody: raw.responseBody ?? raw.bodySnippet ?? '',
-      securityHeadersScore: raw.securityHeadersScore ?? raw.securityGradeScore ?? 0,
-      securityGradeScore: raw.securityGradeScore ?? raw.securityHeadersScore ?? 0,
-      missingHeaders: raw.missingHeaders ?? [],
-      findingsDetected: raw.findingsDetected ?? raw.securityAlerts ?? [],
-      securityAlerts: raw.securityAlerts ?? raw.findingsDetected ?? [],
-      positiveControls: raw.positiveControls ?? [],
-      ...raw,
-    };
-  },
+    }),
 
-  getReportDownloadUrl(scanId: number): string {
-    return `${BASE_URL}/api/reports/scan/${scanId}/download`;
-  },
+  getReports: () => request<ReportSummary[]>('/api/reports/available'),
 
-  async resetData(): Promise<{ status: string; message: string }> {
-    const res = await fetch(`${BASE_URL}/api/dashboard/reset`, { method: 'POST' });
-    if (!res.ok) throw new Error('Failed to reset data');
-    return res.json();
-  },
+  getReportDownloadUrl: (scanId: number) => `${BASE_URL}/api/reports/scan/${scanId}/download`,
 
-  async seedDemo(): Promise<{ status: string; message: string; scanId: number }> {
-    const res = await fetch(`${BASE_URL}/api/dashboard/seed-demo`, { method: 'POST' });
-    if (!res.ok) throw new Error('Failed to seed demo data');
-    return res.json();
-  }
+  clearAllData: () => request<{ status: string; message: string }>('/api/dashboard/reset', { method: 'POST' }),
 };
+
+/** Renders a duration in seconds as a short human label, matching the backend's wording. */
+export function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '—';
+  if (seconds < 60) return `~${Math.max(5, Math.round(seconds / 5) * 5)}s`;
+  return `~${Math.ceil(seconds / 60)} min`;
+}
+
+/** Letter grade for a 0-100 score, used consistently across the UI. */
+export function scoreGrade(score: number): { letter: string; label: string; tone: string } {
+  if (score >= 90) return { letter: 'A', label: 'Strong', tone: 'good' };
+  if (score >= 80) return { letter: 'B', label: 'Good', tone: 'good' };
+  if (score >= 70) return { letter: 'C', label: 'Needs work', tone: 'warn' };
+  if (score >= 50) return { letter: 'D', label: 'Poor', tone: 'warn' };
+  return { letter: 'F', label: 'Critical', tone: 'bad' };
+}

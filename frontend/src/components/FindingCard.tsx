@@ -1,59 +1,67 @@
 import React from 'react';
+import { FileCode, Globe } from 'lucide-react';
 import { Finding } from '../services/api';
 import { SeverityBadge } from './SeverityBadge';
 
-interface FindingCardProps {
+interface Props {
   finding: Finding;
-  onViewDetails: (finding: Finding) => void;
+  onViewDetails: (f: Finding) => void;
 }
 
-export const FindingCard: React.FC<FindingCardProps> = ({ finding, onViewDetails }) => {
-  const affected = finding.endpoint || (finding.filePath ? (finding.lineNumber ? `${finding.filePath}:${finding.lineNumber}` : finding.filePath) : 'Application Core');
-  const shortExplanation = finding.whatIsTheIssue || finding.description;
+const SEVERITY_ACCENT: Record<string, string> = {
+  CRITICAL: 'var(--crit-color)',
+  HIGH: 'var(--high-color)',
+  MEDIUM: 'var(--med-color)',
+  LOW: 'var(--low-color)',
+  INFO: 'var(--info-color)',
+  UNKNOWN: 'var(--info-color)',
+};
+
+export const FindingCard: React.FC<Props> = ({ finding: f, onViewDetails }) => {
+  const accent = SEVERITY_ACCENT[f.severity] ?? 'var(--info-color)';
+  const isStatic = Boolean(f.filePath);
 
   return (
-    <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-      <div>
-        {/* Top Badges */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <SeverityBadge severity={finding.severity} />
-            <SeverityBadge status={finding.status} />
-          </div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            Source: <strong>{finding.source}</strong>
-          </span>
-        </div>
-
-        {/* Title */}
-        <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.5rem', lineHeight: 1.3 }}>
-          {finding.title}
+    <button
+      onClick={() => onViewDetails(f)}
+      className="card"
+      style={{
+        textAlign: 'left',
+        cursor: 'pointer',
+        borderLeft: `3px solid ${accent}`,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '0.55rem',
+      }}
+    >
+      <div className="spread" style={{ alignItems: 'flex-start' }}>
+        <h3 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.35 }}>
+          {f.title}
         </h3>
+        <SeverityBadge value={f.severity} />
+      </div>
 
-        {/* Short Explanation */}
-        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.85rem', lineHeight: 1.45 }}>
-          {shortExplanation.length > 140 ? shortExplanation.substring(0, 140) + '...' : shortExplanation}
+      {f.whatIsTheIssue && (
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
+          {f.whatIsTheIssue.length > 150 ? `${f.whatIsTheIssue.slice(0, 150)}…` : f.whatIsTheIssue}
         </p>
+      )}
 
-        {/* Affected Component */}
-        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
-          <span>Affected: </span>
-          <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--bg-subtle)', padding: '0.15rem 0.35rem', borderRadius: '4px', color: 'var(--text-main)' }}>
-            {affected}
-          </code>
-        </div>
+      <div className="mono muted" style={{ fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+        {isStatic ? <FileCode size={12} /> : <Globe size={12} />}
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {isStatic
+            ? `${f.filePath}${f.lineNumber ? `:${f.lineNumber}` : ''}`
+            : (f.endpoint ?? f.target ?? 'target')}
+        </span>
       </div>
 
-      {/* Action Button */}
-      <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-        <button
-          onClick={() => onViewDetails(finding)}
-          className="btn btn-outline btn-sm"
-          style={{ width: '100%' }}
-        >
-          View Details
-        </button>
+      <div className="row" style={{ gap: '0.4rem', flexWrap: 'wrap' }}>
+        <SeverityBadge value={f.status} kind="status" />
+        {f.cwe && <span className="badge badge-info mono">{f.cwe.split(':')[0]}</span>}
+        {f.cvssScore != null && <span className="badge badge-info mono">CVSS {f.cvssScore}</span>}
+        {f.source && <span className="badge badge-info">{f.source}</span>}
       </div>
-    </div>
+    </button>
   );
 };

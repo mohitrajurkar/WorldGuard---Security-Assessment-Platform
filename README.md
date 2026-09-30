@@ -1,261 +1,209 @@
-# 🛡️ SIH26163 — Security Assessment Platform for World Monitor
+# 🛡️ WorldGuard — Security Assessment Platform
 
-**Smart India Hackathon 2026** | **Problem Statement ID: SIH26163**  
-*A tailored vulnerability scanner, threat correlation engine, and security posture auditor built specifically for the [World Monitor](https://worldmonitor.app) intelligence platform.*
+**Smart India Hackathon 2026** · Problem Statement **SIH26163**
 
----
-
-## 📌 At a Glance
-
-- **Primary Database:** **PostgreSQL** (default on port `5432` with database `wm_security`)
-- **Zero-Setup Database Alternative:** Built-in **H2 embedded database** for instant testing without installing any database server
-- **Backend:** Java 21, Spring Boot 3.3, Spring Data JPA, Hibernate, OpenPDF
-- **Frontend:** React 18, TypeScript, Vite, Vanilla CSS (Dark Cyberpunk / Glassmorphic UI)
-- **Scanning Capabilities:** Static AST / Semgrep rules (SAST), Live crawler & header probe (DAST), Edge API fuzzing, CVSS v3.1 scoring, and instant PDF report generation
+A vulnerability scanner, threat-correlation engine and security-posture auditor built for the
+[World Monitor](https://worldmonitor.app) intelligence platform. It runs three kinds of analysis
+against code you are authorised to test, and produces a PDF report a developer can act on.
 
 ---
 
-## 📖 Why We Built This
+## 🛠️ Technology Stack & Architecture
 
-[World Monitor](https://worldmonitor.app) is an open-source real-time geopolitical intelligence dashboard. Under the hood, it combines high-throughput Edge functions (Vercel), distributed caching (Upstash Redis), cloud backends (Convex), and dozens of external data sources.
+WorldGuard is architected as a distributed security assessment platform comprising a reactive frontend dashboard, a Spring Boot orchestration backend, dual security analysis engines (SAST & DAST), and an automated report generation pipeline.
 
-While World Monitor is brilliant at aggregating global feeds, distributed edge architectures introduce unique security risks:
-- Edge routes sometimes trust client-supplied headers (like `Origin` or `X-Forwarded-For`) to bypass rate limits or authentication.
-- Preview deployments on `*.vercel.app` often end up with overly permissive CORS wildcards.
-- Rapid client-side DOM rendering can open doors for stored or reflected XSS if raw feeds aren't strictly sanitized.
-- Hardcoded fallback secrets in build bundles can leave backend relays exposed.
+### Component Breakdown
 
-This platform was built from the ground up to **actively discover, grade, explain, and help remediate** these exact issues.
+| Layer | Technology | Version | Purpose / Responsibilities |
+|---|---|---|---|
+| **Frontend** | React | 18.3.1 | Reactive, component-based user interface |
+| | TypeScript | 5.4.5 | Strict static typing and interface contracts |
+| | Vite | 5.3.1 | Next-generation frontend build tooling and fast HMR |
+| | Vanilla CSS | Modern CSS3 | Custom design system, dark-mode tokens, glassmorphism, responsive layout |
+| | Lucide React | 0.395.0 | Consistent security and status icon set |
+| **Backend API** | Java | 21 (LTS) | Core programming language runtime |
+| | Spring Boot | 3.3.3 | REST API services, lifecycle management, and dependency injection |
+| | Spring Data JPA | 3.3.3 | Entity-relational mapping and database abstraction |
+| | Hibernate Validator | Jakarta | Request validation and target safety enforcement |
+| **Database** | PostgreSQL | 15+ (Default) | Production-grade relational persistence for scans, findings, and metrics |
+| | H2 Database | 2.x (In-memory) | Embedded zero-setup profile for instant evaluation (`SPRING_PROFILES_ACTIVE=h2`) |
+| **Dynamic Scanner (DAST)** | Node.js | 18+ | Lightweight high-performance microservice engine (`pentest-suite`) |
+| | ES Modules | Native | Asynchronous crawler, active probe injection, SSRF & header analysis |
+| **Static Scanner (SAST)** | Semgrep CLI | Latest | Semantic pattern-matching engine against source code |
+| | Custom Rule Pack | YAML | Tailored detection rules for World Monitor vulnerabilities |
+| **Reporting Engine** | OpenPDF | 1.3.39 | Audit-grade vector PDF report generation with prioritized fix lists |
+| **Security Standards** | CVSS v3.1 | — | Industry-standard Common Vulnerability Scoring System base metrics |
+| | OWASP Top 10 | 2021 | Web application security risk categorization |
+| | CWE | — | Common Weakness Enumeration taxonomy |
 
----
+### Architecture Overview
 
-## 🗄️ Database: Is PostgreSQL Used?
-
-**Yes! PostgreSQL is the primary, production database configured for this application.**
-
-- **Default Configuration (`backend/src/main/resources/application.yml`):**
-  - Driver: `org.postgresql.Driver`
-  - URL: `jdbc:postgresql://localhost:5432/wm_security`
-  - Username: `postgres`
-  - Password: `postgres` (or set via `SPRING_DATASOURCE_PASSWORD`)
-  - Hibernate DDL mode: `update` (tables and indexes are auto-created on first boot)
-
-### Quick One-Time PostgreSQL Setup:
-If you have PostgreSQL installed, create the database with:
-```sql
-CREATE DATABASE wm_security;
-```
-*(Or execute our prepared script: `psql -U postgres -f scripts/setup-postgres.sql`)*
-
-### 💡 No PostgreSQL installed? Use the instant H2 mode!
-You don't need to install PostgreSQL if you just want to run and test the project right away. The platform includes a pre-configured file-based H2 profile. Just run:
-```bash
-cd backend
-mvn spring-boot:run -Dspring-boot.run.profiles=h2
-```
-This stores all audit data in `backend/data/security_platform` with zero external dependencies.
-
----
-
-## 🏗️ Architecture Overview
-
-```
-                          ┌───────────────────────────┐
-                          │   React 18 + Vite UI      │
-                          │   (Dark Security HUD)     │
-                          └─────────────┬─────────────┘
-                                        │ REST / Live Stream
-                                        ▼
-┌─────────────────────────────────────────────────────────────────────────────────┐
-│                     Spring Boot 3 Security Assessment Engine                    │
-│                                                                                 │
-│   ┌─────────────────────┐  ┌─────────────────────┐  ┌────────────────────────┐  │
-│   │     SAST Engine     │  │     DAST Engine     │  │    Edge API Suite      │  │
-│   │  Semgrep + AST Rule │  │   HTTP Probing &    │  │ Specific Edge Routes:  │  │
-│   │     Analyzers       │  │   Header Audits     │  │ /api/version, /health  │  │
-│   └──────────┬──────────┘  └──────────┬──────────┘  └───────────┬────────────┘  │
-│              │                        │                         │               │
-│              └────────────────────────┼─────────────────────────┘               │
-│                                       ▼                                         │
-│                   ┌──────────────────────────────────────┐                      │
-│                   │  Vulnerability Engine & CVSS v3.1    │                      │
-│                   │   Deduplication & Health Scoring     │                      │
-│                   └───────────────────┬──────────────────┘                      │
-│                                       ▼                                         │
-│                   ┌──────────────────────────────────────┐                      │
-│                   │   OpenPDF Report Generation Engine   │                      │
-│                   └───────────────────┬──────────────────┘                      │
-└───────────────────────────────────────┼─────────────────────────────────────────┘
-                                        ▼
-                  ┌──────────────────────────────────────────┐
-                  │    PostgreSQL (Default)  /  H2 (Fallback)│
-                  └──────────────────────────────────────────┘
+```mermaid
+graph TD
+    UI[Frontend: React 18 + TypeScript + Vite] -->|REST / JSON| API[Backend: Spring Boot 3.3 on Java 21]
+    API -->|JPA / Hibernate| DB[(Database: PostgreSQL / H2)]
+    API -->|HTTP REST on :8888| DAST[Dynamic Engine: Node.js Pentest Suite]
+    API -->|Process Execution| SAST[Static Engine: Semgrep CLI]
+    API -->|PDF Generation| PDF[Report Generator: OpenPDF Engine]
+    DAST -->|Active Probes| Target[Target Application: World Monitor]
+    SAST -->|Static Analysis| Repo[Target Git Repository]
 ```
 
 ---
 
-## 🎯 Key Features
-
-### 1. Multi-Stage Scanning (SAST + DAST + Edge Probes)
-- **SAST**: Scans TypeScript/JavaScript source code for hardcoded credentials, improper DOM insertions (`innerHTML`), dynamic `eval()`, and insecure `localStorage` caching.
-- **DAST**: Evaluates running targets for missing defensive headers (CSP, HSTS, X-Frame-Options), CORS misconfigurations, and clickjacking risks.
-- **Edge API Suite**: Tailored specifically for World Monitor edge endpoints (`/api/version`, `/api/health`, `/api/seed-contract-probe`, `/api/relay`), identifying header spoofing and debug leaks.
-
-### 2. Intelligent Scoring & Risk Engine
-- Calculates standard **CVSS v3.1** base scores and associates exact **CWE** numbers.
-- Computes an aggregate **Platform Health Score (0–100)** so teams can understand their security posture at a glance.
-- Provides plain-English impact summaries and concrete remediation code snippets.
-
-### 3. Interactive Live API Probe Tool
-- Test individual endpoints with custom HTTP headers, methods, and payloads directly from the web interface.
-- Automatically analyzes response headers, security grades, and warns about leaky metadata.
-
-### 4. Architecture & Data Flow Auditing
-- Visual breakdown of the entire World Monitor attack surface: client SPA, Vercel edge runtime, Upstash Redis, Convex database, and external RSS/news ingestion pipelines.
-
-### 5. Automated PDF Report Generation
-- One-click export of executive security audit reports formatted with executive summaries, vulnerability breakdown tables, threat vectors, and recommended fixes.
-
----
-
-## 🔍 Vulnerability Findings Catalog
-
-Here are key vulnerabilities evaluated and cataloged by the platform:
-
-| Finding Title | Severity | CVSS v3.1 | CWE | Target Location | Threat & Impact |
-|---|---|---|---|---|---|
-| **Hardcoded Relay Shared Secret** | `CRITICAL` | 9.1 | CWE-798 | `api/relay.ts:28` | Fallback developer token allows unauthorized communication with internal bridge. |
-| **Origin-Based API Key Exemption** | `HIGH` | 7.8 | CWE-290 | `api/_api-key.js:44` | Client-supplied `Origin` header is trusted blindly, allowing rate-limit bypass. |
-| **Permissive Wildcard CORS on Previews** | `HIGH` | 7.2 | CWE-942 | `api/_cors.js:19` | RegEx matches any arbitrary `*.vercel.app` domain, allowing cross-origin data theft. |
-| **Webhook SSRF DNS Rebinding** | `HIGH` | 8.2 | CWE-918 | `api/_notification-webhook-ssrf.ts` | Time-of-check to time-of-use DNS resolution gap allows internal VPC probing. |
-| **Unsanitized DOM Feed Rendering** | `HIGH` | 7.5 | CWE-79 | `src/components/NewsFeed.ts` | External RSS content directly inserted into DOM via `innerHTML` without DOMPurify. |
-| **Regex Bot Gate Bypass** | `MEDIUM` | 5.3 | CWE-863 | `middleware.ts:16` | Naive User-Agent string check can be easily circumvented by automated scrapers. |
-| **Unauthenticated Seed Probe Exposed** | `MEDIUM` | 5.8 | CWE-200 | `/api/seed-contract-probe` | Debug probe endpoint left accessible in production environment. |
-| **Sensitive Session in LocalStorage** | `MEDIUM` | 5.9 | CWE-922 | `src/utils/urlState.ts` | Unencrypted browser storage used for session state and auth tokens. |
-| **Missing Content Security Policy (CSP)** | `LOW` | 4.5 | CWE-1021 | `https://worldmonitor.app` | Root domain lacks strict CSP headers, leaving window for script injection. |
-| **Missing Anti-Clickjacking Headers** | `LOW` | 4.1 | CWE-1021 | `https://worldmonitor.app` | Missing `X-Frame-Options` allows embedding in malicious iframes. |
-
----
-
-## 🚀 Getting Started
-
-### Requirements
-- **Java 21 or higher**
-- **Node.js 18+** & **npm**
-- **Maven 3.9+**
-- **PostgreSQL 14+** *(optional if using the H2 fallback)*
-
----
-
-### Method 1: The Quickest Way (Windows 1-Click Script)
-
-From the project root directory, run:
-```cmd
-scripts\start-all.bat
-```
-This opens two dedicated terminal windows:
-1. Spring Boot backend on **http://localhost:8080**
-2. Vite React UI on **http://localhost:5173**
-
----
-
-### Method 2: Manual Step-by-Step
-
-#### 1. Setup the Database
-If using PostgreSQL (recommended):
-```sql
-CREATE DATABASE wm_security;
-```
-*(If your Postgres password is not `postgres`, set the environment variable: `set SPRING_DATASOURCE_PASSWORD=your_password`)*
-
-#### 2. Start the Backend
-```bash
-cd backend
-mvn spring-boot:run
-```
-*(To run with zero-setup H2 instead, add `-Dspring-boot.run.profiles=h2`)*
-
-You can verify the backend is ready when you see:
-```
-Started SecurityPlatformApplication in ... seconds (process running on port 8080)
-```
-
-#### 3. Start the Frontend
-In a separate terminal:
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open your browser at **http://localhost:5173**.
-
----
-
-## 🧪 Tour of the Web Interface
-
-1. **Dashboard (`/`)**:
-   - Live Security Health Score gauge with dynamic grading (A through F).
-   - Severity breakdown cards (Critical, High, Medium, Low).
-   - Quick launcher for scanning and recent scan history.
-
-2. **Launch New Scan (`/new-scan`)**:
-   - Choose scan profile: **Complete Audit**, **SAST Source Review**, or **Edge API Probe**.
-   - Watch the scan orchestrator step through phases with real-time status updates.
-
-3. **Vulnerabilities Catalog (`/findings`)**:
-   - Filter by severity, category (Authentication, CORS, SSRF, Injection), or search by keyword.
-   - Click any card to inspect code evidence, CWE tags, and copy-paste ready mitigation steps.
-
-4. **Live API Probe (`/api-tester`)**:
-   - Send custom HTTP requests against World Monitor endpoints.
-   - Test how the target responds to spoofed origins, malformed payloads, or probe headers.
-
-5. **Architecture Review (`/architecture`)**:
-   - Interactive security architecture diagram mapping trust boundaries between client, edge workers, caches, and upstream news providers.
-
-6. **Executive PDF Reports (`/reports`)**:
-   - Preview generated reports and download publication-ready PDFs for stakeholders.
-
----
-
-## 📂 Project Structure
+## Project layout
 
 ```
 SIH World monitor/
-├── backend/                              # Spring Boot 3 Java backend
-│   ├── pom.xml                           # Dependencies (PostgreSQL, H2, JPA, OpenPDF)
-│   ├── src/main/java/com/sih/securityplatform/
-│   │   ├── controller/                   # REST API controllers
-│   │   ├── model/                        # JPA Entities (Scan, Finding, Report)
-│   │   ├── repository/                   # Spring Data JPA repositories
-│   │   └── service/                      # SAST, DAST, API, & PDF Generation services
-│   └── src/main/resources/
-│       ├── application.yml               # Default PostgreSQL configuration
-│       └── application-h2.yml            # Standalone H2 fallback configuration
+├── backend/                          # Spring Boot API
+│   └── src/main/java/com/sih/securityplatform/
+│       ├── controller/               # REST endpoints
+│       ├── model/                    # JPA entities (Scan, Finding, enums)
+│       ├── repository/               # Spring Data repositories
+│       ├── dto/                      # request/response shapes
+│       └── service/                  # orchestration, scoring, reporting, analysis
+│           └── pentest/              # client for the external dynamic engine
 │
-├── frontend/                             # React 18 + TypeScript + Vite
-│   ├── src/
-│   │   ├── components/                   # Navigation, cards, score meters
-│   │   ├── pages/                        # Dashboard, Scans, Findings, API Probe, Reports
-│   │   └── services/                     # API client layer
-│   └── package.json
+├── frontend/                         # React + TypeScript UI
+│   └── src/
+│       ├── components/               # Navbar, FindingCard, FindingModal, SecurityGauge
+│       ├── pages/                    # Dashboard, NewScan, ScanDetail, Findings, Reports, ApiTester
+│       └── services/api.ts           # typed API client
 │
-├── scanner/                              # Analysis rules and definitions
-│   ├── api/                              # Edge route test specifications
-│   ├── semgrep/                          # Custom Semgrep SAST rule YAMLs
-│   └── zap/                              # DAST scanner configuration
+├── scanner/
+│   ├── static-test/
+│   │   └── semgrep/                  # curated Semgrep rule pack
+│   └── dynamic-test/
+│       ├── pentest-suite/            # Node.js scanning engine (port 8888)
+│       └── api/                      # API probe specifications
 │
-└── scripts/                              # Convenient automation scripts
-    ├── setup-postgres.sql                # SQL script to create wm_security DB
-    ├── start-all.bat                     # 1-click startup for both services
-    ├── start-backend.bat                 # Backend runner
-    └── start-frontend.bat                # Frontend runner
+└── scripts/                          # one-click startup helpers
 ```
 
 ---
 
-## 📄 License & Attribution
+## Running it
 
-Developed for the **Smart India Hackathon 2026** under Problem Statement **SIH26163**.  
-Target application reference: [World Monitor](https://github.com/koala73/worldmonitor).
+**Requirements:** Java 21+, Maven 3.9+, Node 18+.
+
+```cmd
+scripts\start-all.bat
+```
+
+That starts three processes:
+
+| Service | URL |
+|---|---|
+| Web UI | http://localhost:5173 |
+| Backend API | http://localhost:8080 |
+| Dynamic engine | http://localhost:8888 |
+
+### Database
+
+PostgreSQL is the default:
+
+```sql
+CREATE DATABASE wm_security;
+```
+
+Prefer no database at all? Use the embedded profile:
+
+```cmd
+set SPRING_PROFILES_ACTIVE=h2
+scripts\start-all.bat
+```
+
+### Running the parts separately
+
+```bash
+cd backend   && mvn spring-boot:run
+cd frontend  && npm install && npm run dev
+cd scanner/dynamic-test/pentest-suite && node server.mjs
+```
+
+---
+
+## Scan types
+
+| Type | What it does | Est. (STANDARD) |
+|---|---|---|
+| **Complete** | Static source + dynamic pentest + API probe, merged into one report | ~5 min |
+| **Dynamic (DAST)** | Crawls and actively probes a running site | ~6 min |
+| **Static (SAST)** | Clones `github.com/koala73/worldmonitor` and analyses the source | ~5 min |
+| **API probe** | Headers, CORS, info disclosure and method handling on one endpoint | ~25 s |
+
+### Durations are measured, not guessed
+
+The time shown in the UI comes from the backend. It starts from realistic defaults and is
+**replaced by the actual measured duration** after each run, with headroom added so the promise
+is never optimistic.
+
+A scan is also **guaranteed to finish**: every phase has a deadline, and when a scan reaches its
+budget it finalises with whatever it has collected and records why. A scan is never left
+`RUNNING`, and partial results are labelled as such rather than thrown away.
+
+---
+
+## How results are produced
+
+1. **Acquire** — clone the repository, or point the crawler at a running target.
+2. **Analyse** — Semgrep and the built-in rule set for code; the Pentest Suite for runtime
+   behaviour; a focused probe for a single endpoint.
+3. **Normalise** — every finding is mapped onto one model with a CVSS score, CWE and OWASP tag.
+4. **Deduplicate** — a stable SHA-256 fingerprint collapses the same issue reported twice.
+5. **Correlate** — related findings on the same endpoint are linked.
+6. **Verify** — findings are graded by evidence. Confirmed issues stay confirmed; unconfirmed
+   static pattern matches stay `Potential`.
+7. **Score** — a 0–100 posture score weighted by severity *and* confidence, so a noisy rule set
+   cannot make a target look worse than it is.
+8. **Report** — a PDF with a verdict, a prioritised fix list, and per-issue evidence.
+
+### What the confidence labels mean
+
+| Label | Meaning |
+|---|---|
+| **Verified** | Observed directly at runtime with supporting evidence |
+| **Needs review** | Runtime signal without conclusive proof |
+| **Potential** | Static pattern match; reachable or exploitable is unproven |
+
+---
+
+## The report
+
+The PDF is written for a developer who has to fix the problems:
+
+1. **Score and verdict** — the number, its band, and a one-line judgement.
+2. **Summary** — what was scanned, how long it took, what was confirmed.
+3. **Prioritised fix list** — every issue ranked by severity then confidence, with the file and
+   line to change and an effort estimate.
+4. **Issue details** — what is wrong, why it matters, the evidence, how to reproduce, and the fix.
+5. **Coverage and limitations** — what the engines could and could not see, so a partial result
+   is never mistaken for a clean bill of health.
+
+---
+
+## Safety
+
+- Every scan requires an explicit authorisation confirmation.
+- Targets are validated before any request is sent: cloud metadata endpoints are blocked, DNS
+  results are checked against private ranges, and only `http`/`https` are permitted.
+- All testing is non-destructive.
+
+---
+
+## Tests
+
+```bash
+cd backend && mvn test     # 36 tests
+cd frontend && npm run build
+```
+
+The suite covers score calibration, duration/deadline guarantees, filter correctness, the target
+security policy, and the database migration that repairs legacy rows on startup.
+
+---
+
+## Licence
+
+Developed for the Smart India Hackathon 2026 under problem statement SIH26163.
+Target application: [World Monitor](https://github.com/koala73/worldmonitor).

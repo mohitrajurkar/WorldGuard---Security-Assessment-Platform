@@ -1,194 +1,243 @@
 import React, { useState } from 'react';
-import { X, ChevronDown, ChevronRight, ShieldAlert, CheckCircle2 } from 'lucide-react';
-import { Finding, api } from '../services/api';
+import { X, Wrench, FileCode, Globe } from 'lucide-react';
+import { api, Finding, FindingStatus } from '../services/api';
 import { SeverityBadge } from './SeverityBadge';
 
-interface FindingModalProps {
-  finding: Finding | null;
+interface Props {
+  finding: Finding;
   onClose: () => void;
-  onStatusUpdated?: () => void;
+  onStatusUpdated: () => void;
 }
 
-export const FindingModal: React.FC<FindingModalProps> = ({ finding, onClose, onStatusUpdated }) => {
-  const [showTechnical, setShowTechnical] = useState(false);
-  const [updating, setUpdating] = useState(false);
+type Tab = 'overview' | 'evidence' | 'reproduce' | 'fix';
 
-  if (!finding) return null;
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'evidence', label: 'Evidence' },
+  { id: 'reproduce', label: 'Reproduce' },
+  { id: 'fix', label: 'How to fix' },
+];
 
-  const handleStatusChange = async (newStatus: string) => {
-    setUpdating(true);
+const TRIAGE: { status: FindingStatus; label: string }[] = [
+  { status: 'VERIFIED', label: 'Confirm' },
+  { status: 'NEEDS_REVIEW', label: 'Needs review' },
+  { status: 'FALSE_POSITIVE', label: 'False positive' },
+];
+
+function Block({ title, children }: { title: string; children: React.ReactNode }) {
+  if (!children) return null;
+  return (
+    <div style={{ marginBottom: '0.9rem' }}>
+      <div className="form-label">{title}</div>
+      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.55 }}>{children}</div>
+    </div>
+  );
+}
+
+function Code({ text }: { text?: string }) {
+  if (!text) return null;
+  return <pre className="code-box">{text}</pre>;
+}
+
+export const FindingModal: React.FC<Props> = ({ finding: f, onClose, onStatusUpdated }) => {
+  const [tab, setTab] = useState<Tab>('overview');
+  const [saving, setSaving] = useState(false);
+  const isStatic = Boolean(f.filePath);
+
+  const setStatus = async (status: FindingStatus) => {
+    setSaving(true);
     try {
-      await api.updateFindingStatus(finding.id, newStatus);
-      if (onStatusUpdated) onStatusUpdated();
+      await api.updateFindingStatus(f.id, status);
+      onStatusUpdated();
     } catch (e) {
-      alert('Failed to update status');
+      alert(e instanceof Error ? e.message : 'Could not update status');
     } finally {
-      setUpdating(false);
+      setSaving(false);
     }
   };
 
-  const affected = finding.endpoint || (finding.filePath ? (finding.lineNumber ? `${finding.filePath}:${finding.lineNumber}` : finding.filePath) : 'Application Core');
+  const visibleTabs = TABS.filter((t) => {
+    if (t.id === 'evidence') return Boolean(f.evidence || f.httpResponse);
+    if (t.id === 'reproduce') return Boolean(f.poc || f.reproductionSteps || f.httpRequest);
+    return true;
+  });
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgb(15 23 42 / 0.55)',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        padding: '3rem 1rem',
+        zIndex: 100,
+        overflowY: 'auto',
+      }}
+    >
+      <div
+        className="card"
+        onClick={(e) => e.stopPropagation()}
+        style={{ maxWidth: 820, width: '100%', boxShadow: 'var(--shadow-lg)', padding: 0 }}
+      >
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
+        <div
+          style={{
+            padding: '1.1rem 1.25rem',
+            borderBottom: '1px solid var(--border-color)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            gap: '1rem',
+            alignItems: 'flex-start',
+          }}
+        >
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-              <SeverityBadge severity={finding.severity} />
-              <SeverityBadge status={finding.status} />
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Source: {finding.source}</span>
+            <div className="row" style={{ gap: '0.5rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
+              <SeverityBadge value={f.severity} />
+              <SeverityBadge value={f.status} kind="status" />
+              {f.cwe && <span className="badge badge-info mono">{f.cwe}</span>}
+              {f.cvssScore != null && <span className="badge badge-info mono">CVSS {f.cvssScore}</span>}
             </div>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.3 }}>
-              {finding.title}
-            </h2>
+            <h2 style={{ fontSize: '1.05rem', fontWeight: 700, lineHeight: 1.35 }}>{f.title}</h2>
+            <div className="mono muted" style={{ fontSize: '0.75rem', marginTop: '0.3rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+              {isStatic ? <FileCode size={12} /> : <Globe size={12} />}
+              {isStatic
+                ? `${f.filePath}${f.lineNumber ? `:${f.lineNumber}` : ''}`
+                : `${f.method ?? 'GET'} ${f.endpoint ?? f.target ?? ''}`}
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="btn btn-outline btn-sm"
-            style={{ padding: '0.4rem', borderRadius: '50%', color: 'var(--text-muted)' }}
-          >
-            <X size={18} />
+          <button className="btn btn-outline btn-sm" onClick={onClose} aria-label="Close">
+            <X size={15} />
           </button>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          {/* Section 1: What is the issue? */}
-          <div>
-            <h4 style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '0.35rem', fontWeight: 600 }}>
-              What is the issue?
-            </h4>
-            <p style={{ fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: 1.5 }}>
-              {finding.whatIsTheIssue || finding.description}
-            </p>
-          </div>
-
-          {/* Section 2: Why does it matter? */}
-          <div>
-            <h4 style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '0.35rem', fontWeight: 600 }}>
-              Why does it matter?
-            </h4>
-            <p style={{ fontSize: '0.95rem', color: 'var(--text-main)', lineHeight: 1.5 }}>
-              {finding.whyDoesItMatter || finding.impact}
-            </p>
-          </div>
-
-          {/* Section 3: Affected Component & Evidence */}
-          <div style={{ background: 'var(--bg-subtle)', padding: '1rem', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
-            <div style={{ marginBottom: '0.75rem' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Affected Component:
-              </span>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)', marginTop: '0.2rem' }}>
-                {affected}
-              </div>
-            </div>
-
-            <div>
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Actual Scanner Evidence:
-              </span>
-              <div style={{ marginTop: '0.35rem' }} className="code-box">
-                {finding.evidence || 'Direct observation confirmed during security assessment.'}
-              </div>
-            </div>
-          </div>
-
-          {/* Section 4: How to reproduce safely */}
-          {finding.reproductionSteps && (
-            <div>
-              <h4 style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: '0.35rem', fontWeight: 600 }}>
-                How to reproduce (Safe Verification)
-              </h4>
-              <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-                {finding.reproductionSteps}
-              </p>
-            </div>
-          )}
-
-          {/* Section 5: Recommended Fix */}
-          <div style={{ borderLeft: '3px solid var(--primary-blue)', paddingLeft: '1rem' }}>
-            <h4 style={{ fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--primary-blue)', marginBottom: '0.35rem', fontWeight: 600 }}>
-              Recommended Fix
-            </h4>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-main)' }}>
-              {finding.recommendation}
-            </p>
-          </div>
-
-          {/* Section 6: Technical Details (Collapsed by default) */}
-          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+        {/* Tabs */}
+        <div style={{ display: 'flex', gap: '0.25rem', padding: '0.6rem 1.25rem 0', borderBottom: '1px solid var(--border-color)' }}>
+          {visibleTabs.map((t) => (
             <button
-              onClick={() => setShowTechnical(!showTechnical)}
+              key={t.id}
+              onClick={() => setTab(t.id)}
               style={{
-                background: 'transparent',
-                border: 'none',
+                padding: '0.5rem 0.75rem',
+                fontSize: '0.82rem',
+                fontWeight: tab === t.id ? 600 : 500,
+                color: tab === t.id ? 'var(--primary-blue)' : 'var(--text-muted)',
+                borderBottom: `2px solid ${tab === t.id ? 'var(--primary-blue)' : 'transparent'}`,
                 cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                color: 'var(--text-secondary)',
-                padding: '0.25rem 0'
               }}
             >
-              {showTechnical ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-              <span>Technical Details & Metadata</span>
+              {t.label}
             </button>
+          ))}
+        </div>
 
-            {showTechnical && (
-              <div style={{ marginTop: '0.75rem', padding: '0.75rem', background: 'var(--bg-subtle)', borderRadius: '6px', fontSize: '0.8rem' }}>
-                <div style={{ marginBottom: '0.5rem' }}>
-                  <strong>CWE Taxonomy:</strong> {finding.cwe || 'N/A'}
-                </div>
-                {finding.cvssScore !== undefined && (
-                  <div style={{ marginBottom: '0.5rem' }}>
-                    <strong>Calculated Base Score:</strong> {finding.cvssScore} / 10.0
-                  </div>
-                )}
-                {finding.rawTechnicalDetails && (
-                  <div style={{ marginTop: '0.5rem' }}>
-                    <strong>Raw Scanner Output:</strong>
-                    <pre style={{ marginTop: '0.25rem', padding: '0.5rem', background: '#0f172a', color: '#f8fafc', borderRadius: '4px', overflowX: 'auto', fontSize: '0.75rem' }}>
-                      {finding.rawTechnicalDetails}
-                    </pre>
-                  </div>
-                )}
+        {/* Body */}
+        <div style={{ padding: '1.25rem', maxHeight: '58vh', overflowY: 'auto' }}>
+          {tab === 'overview' && (
+            <>
+              <Block title="What is wrong">{f.whatIsTheIssue || f.description}</Block>
+              <Block title="Why it matters">{f.whyDoesItMatter || f.impact}</Block>
+              {f.impact && f.impact !== f.whyDoesItMatter && <Block title="Impact">{f.impact}</Block>}
+              {f.category && <Block title="Category">{f.category.replace(/_/g, ' ').toLowerCase()}</Block>}
+              {f.owaspCategory && <Block title="OWASP">{f.owaspCategory}</Block>}
+              {f.remediationTimeMinutes != null && (
+                <Block title="Estimated effort">~{f.remediationTimeMinutes} minutes</Block>
+              )}
+              {f.source && <Block title="Detected by">{f.source}</Block>}
+            </>
+          )}
+
+          {tab === 'evidence' && (
+            <>
+              {f.evidence && <Code text={f.evidence} />}
+              {f.httpResponse && (
+                <>
+                  <div className="form-label">Response</div>
+                  <Code text={f.httpResponse} />
+                </>
+              )}
+            </>
+          )}
+
+          {tab === 'reproduce' && (
+            <>
+              {f.httpRequest && (
+                <>
+                  <div className="form-label">Request</div>
+                  <Code text={f.httpRequest} />
+                </>
+              )}
+              {f.poc && (
+                <>
+                  <div className="form-label">Proof of concept</div>
+                  <Code text={f.poc} />
+                </>
+              )}
+              {f.reproductionSteps && (
+                <>
+                  <div className="form-label">Steps</div>
+                  <div style={{ fontSize: '0.85rem', whiteSpace: 'pre-wrap' }}>{f.reproductionSteps}</div>
+                </>
+              )}
+            </>
+          )}
+
+          {tab === 'fix' && (
+            <>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '0.6rem',
+                  alignItems: 'flex-start',
+                  background: 'var(--low-bg)',
+                  border: '1px solid var(--low-border)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '0.85rem 1rem',
+                  marginBottom: '0.9rem',
+                }}
+              >
+                <Wrench size={16} color="var(--low-color)" style={{ flexShrink: 0, marginTop: 2 }} />
+                <div style={{ fontSize: '0.86rem', lineHeight: 1.55 }}>{f.recommendation || 'No automated fix available.'}</div>
               </div>
-            )}
-          </div>
+              <Block title="Affected code">
+                <span className="mono">
+                  {isStatic ? `${f.filePath}${f.lineNumber ? `:${f.lineNumber}` : ''}` : f.endpoint}
+                </span>
+              </Block>
+            </>
+          )}
+        </div>
 
-          {/* Triage Status Actions */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '0.5rem' }}>
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              Mark Triage Status:
-            </div>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+        {/* Triage */}
+        <div
+          style={{
+            padding: '0.85rem 1.25rem',
+            borderTop: '1px solid var(--border-color)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '0.75rem',
+            flexWrap: 'wrap',
+            background: 'var(--bg-subtle)',
+            borderRadius: '0 0 var(--radius-md) var(--radius-md)',
+          }}
+        >
+          <span className="muted" style={{ fontSize: '0.78rem' }}>
+            Triage this finding
+          </span>
+          <div className="row" style={{ gap: '0.4rem' }}>
+            {TRIAGE.map((t) => (
               <button
-                onClick={() => handleStatusChange('VERIFIED')}
-                disabled={updating}
-                className="btn btn-outline btn-sm"
-                style={{ borderColor: 'var(--verified-border)', color: 'var(--verified-color)' }}
+                key={t.status}
+                className={`btn btn-sm ${f.status === t.status ? 'btn-primary' : 'btn-outline'}`}
+                disabled={saving}
+                onClick={() => setStatus(t.status)}
               >
-                Mark Verified
+                {t.label}
               </button>
-              <button
-                onClick={() => handleStatusChange('FALSE_POSITIVE')}
-                disabled={updating}
-                className="btn btn-outline btn-sm"
-              >
-                False Positive
-              </button>
-              <button
-                onClick={() => handleStatusChange('NEEDS_REVIEW')}
-                disabled={updating}
-                className="btn btn-outline btn-sm"
-              >
-                Needs Review
-              </button>
-            </div>
+            ))}
           </div>
         </div>
       </div>

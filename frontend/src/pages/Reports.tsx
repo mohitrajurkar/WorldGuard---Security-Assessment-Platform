@@ -1,98 +1,117 @@
-import React, { useEffect, useState } from 'react';
-import { api, Scan } from '../services/api';
-import { FileText, Download, RefreshCw, CheckCircle2, Shield } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Download, RefreshCw, CheckCircle2, ArrowRight } from 'lucide-react';
+import { api, ReportSummary } from '../services/api';
+import { scoreGrade } from '../services/api';
 
-export const Reports: React.FC = () => {
-  const [scans, setScans] = useState<Scan[]>([]);
+export const Reports: React.FC<{ onOpenScan: (scanId: number) => void }> = ({ onOpenScan }) => {
+  const [reports, setReports] = useState<ReportSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const loadScans = async () => {
-    setLoading(true);
+  const load = useCallback(async () => {
     try {
-      const list = await api.getScans();
-      setScans(list.filter(s => s.status === 'COMPLETED'));
-    } catch (err) {
-      console.error(err);
+      setError(null);
+      setReports(await api.getReports());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load reports');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadScans();
-  }, []);
+    load();
+  }, [load]);
 
   return (
     <div>
-      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+      <div className="spread" style={{ marginBottom: '1rem' }}>
         <div>
-          <h1 className="page-title">Executive Security Reports</h1>
+          <h1 className="page-title">Reports</h1>
           <p className="page-subtitle">
-            Downloadable PDF assessment documentation structured for technical teams and executive leadership.
+            A PDF per completed assessment: score and verdict, a prioritised fix list, and per-issue evidence.
           </p>
         </div>
-
-        <button onClick={loadScans} className="btn btn-outline btn-sm">
+        <button className="btn btn-outline btn-sm" onClick={load}>
           <RefreshCw size={14} />
           <span>Refresh</span>
         </button>
       </div>
 
+      {error && <div className="error-banner">{error}</div>}
+
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-          Loading available reports...
-        </div>
-      ) : scans.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '3.5rem 1rem' }}>
-          <CheckCircle2 size={40} color="var(--primary-blue)" style={{ margin: '0 auto 0.75rem' }} />
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-main)' }}>
-            No Assessment Reports Available
-          </h3>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            Complete a security scan to generate PDF assessment reports.
+        <div className="empty-state">Loading reports…</div>
+      ) : reports.length === 0 ? (
+        <div className="card empty-state">
+          <CheckCircle2 size={36} color="var(--primary-blue)" style={{ margin: '0 auto 0.6rem' }} />
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-main)' }}>No reports yet</h3>
+          <p style={{ fontSize: '0.85rem', marginTop: '0.2rem' }}>
+            A report is generated automatically whenever an assessment completes.
           </p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.25rem' }}>
-          {scans.map((s) => (
-            <div key={s.id} className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-                  <span className="badge badge-info">{s.scanType} AUDIT</span>
-                  <strong style={{ fontSize: '1.1rem', color: s.securityScore >= 80 ? '#16a34a' : s.securityScore >= 60 ? '#d97706' : '#dc2626' }}>
-                    {s.securityScore} / 100
-                  </strong>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
+          {reports.map((r) => {
+            const grade = scoreGrade(r.securityScore);
+            const color = grade.tone === 'good' ? '#16a34a' : grade.tone === 'warn' ? '#d97706' : '#dc2626';
+            return (
+              <div key={r.scanId} className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div className="spread" style={{ marginBottom: '0.7rem' }}>
+                    <span className="badge badge-info">{r.scanType}</span>
+                    <span style={{ fontSize: '1.15rem', fontWeight: 800, color }}>
+                      {r.securityScore}
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500 }}> /100</span>
+                    </span>
+                  </div>
+
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.3rem' }}>
+                    Assessment #{r.scanId}
+                  </h3>
+                  <p className="mono muted" style={{ fontSize: '0.75rem', marginBottom: '0.7rem' }}>
+                    {r.targetUrl}
+                  </p>
+
+                  <div className="metric-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                    <div className="metric-tile">
+                      <span className="metric-tile__label">Critical</span>
+                      <span className="metric-tile__value" style={{ color: r.criticalCount ? 'var(--crit-color)' : 'var(--text-muted)' }}>
+                        {r.criticalCount}
+                      </span>
+                    </div>
+                    <div className="metric-tile">
+                      <span className="metric-tile__label">High</span>
+                      <span className="metric-tile__value" style={{ color: r.highCount ? 'var(--high-color)' : 'var(--text-muted)' }}>
+                        {r.highCount}
+                      </span>
+                    </div>
+                    <div className="metric-tile">
+                      <span className="metric-tile__label">Verified</span>
+                      <span className="metric-tile__value">{r.verifiedCount}</span>
+                    </div>
+                  </div>
                 </div>
 
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.4rem' }}>
-                  World Monitor Assessment #{s.id}
-                </h3>
-
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                  Target: <code>{s.targetUrl}</code>
-                </div>
-
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem', background: 'var(--bg-subtle)', padding: '0.6rem 0.75rem', borderRadius: '6px' }}>
-                  <div>Verified Vulnerabilities: <strong>{s.verifiedCount}</strong></div>
-                  <div>Needs Review: <strong>{s.needsReviewCount}</strong></div>
-                  <div>Potential Findings: <strong>{s.potentialCount}</strong></div>
+                <div className="row" style={{ gap: '0.5rem', marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-subtle)' }}>
+                  <button className="btn btn-outline btn-sm" style={{ flex: 1 }} onClick={() => onOpenScan(r.scanId)}>
+                    Details
+                    <ArrowRight size={12} />
+                  </button>
+                  <a
+                    href={api.getReportDownloadUrl(r.scanId)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-primary btn-sm"
+                    style={{ flex: 1 }}
+                  >
+                    <Download size={13} />
+                    <span>PDF</span>
+                  </a>
                 </div>
               </div>
-
-              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                <a
-                  href={api.getReportDownloadUrl(s.id)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="btn btn-primary btn-sm"
-                  style={{ width: '100%' }}
-                >
-                  <Download size={14} />
-                  <span>Download PDF Report</span>
-                </a>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

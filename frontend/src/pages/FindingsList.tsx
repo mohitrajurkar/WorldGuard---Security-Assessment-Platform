@@ -1,148 +1,156 @@
-import React, { useEffect, useState } from 'react';
-import { api, Finding } from '../services/api';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Search, RefreshCw, CheckCircle2, ExternalLink } from 'lucide-react';
+import { api, Finding, Severity, FindingStatus } from '../services/api';
 import { FindingCard } from '../components/FindingCard';
 import { FindingModal } from '../components/FindingModal';
-import { Search, RefreshCw, Filter, CheckCircle2 } from 'lucide-react';
+
+const SEVERITIES: Severity[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
+const STATUSES: FindingStatus[] = ['VERIFIED', 'NEEDS_REVIEW', 'POTENTIAL', 'FALSE_POSITIVE', 'INFORMATIONAL'];
+
+const CATEGORIES = [
+  'INJECTION', 'CORS', 'SSRF', 'AUTHENTICATION', 'AUTHORIZATION', 'SECURITY_HEADERS',
+  'CRYPTOGRAPHY', 'CONFIGURATION', 'INFORMATION_DISCLOSURE', 'RATE_LIMITING',
+  'DATA_EXPOSURE', 'DEPENDENCY', 'API_SECURITY', 'CODE_QUALITY',
+];
 
 export const FindingsList: React.FC = () => {
   const [findings, setFindings] = useState<Finding[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedSeverity, setSelectedSeverity] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
-  const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [severity, setSeverity] = useState('');
+  const [status, setStatus] = useState('');
+  const [category, setCategory] = useState('');
+  const [selected, setSelected] = useState<Finding | null>(null);
 
-  const loadFindings = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const list = await api.getFindings({
-        severity: selectedSeverity || undefined,
-        status: selectedStatus || undefined
-      });
-      setFindings(list);
-    } catch (err) {
-      console.error(err);
+      setError(null);
+      // Every filter is sent to the server so combined filters are honoured.
+      setFindings(
+        await api.getFindings({
+          severity: severity || undefined,
+          status: status || undefined,
+          category: category || undefined,
+        }),
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load findings');
     } finally {
       setLoading(false);
     }
-  };
+  }, [severity, status, category]);
 
   useEffect(() => {
-    loadFindings();
-  }, [selectedSeverity, selectedStatus]);
+    load();
+  }, [load]);
 
   const filtered = findings.filter((f) => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
+    if (!query) return true;
+    const q = query.toLowerCase();
     return (
       f.title.toLowerCase().includes(q) ||
-      (f.whatIsTheIssue && f.whatIsTheIssue.toLowerCase().includes(q)) ||
-      (f.endpoint && f.endpoint.toLowerCase().includes(q)) ||
-      (f.filePath && f.filePath.toLowerCase().includes(q)) ||
+      (f.whatIsTheIssue ?? '').toLowerCase().includes(q) ||
+      (f.filePath ?? '').toLowerCase().includes(q) ||
+      (f.endpoint ?? '').toLowerCase().includes(q) ||
       f.source.toLowerCase().includes(q)
     );
   });
 
+  const hasFilters = Boolean(query || severity || status || category);
+
   return (
     <div>
-      <div className="page-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
+      <div className="spread" style={{ marginBottom: '1rem' }}>
         <div>
-          <h1 className="page-title">Security Findings Catalog</h1>
+          <h1 className="page-title">Findings</h1>
           <p className="page-subtitle">
-            All authentic security findings discovered across static analysis, dynamic scanning, and API probes.
+            Every issue recorded across all assessments, with evidence and a concrete fix.
           </p>
         </div>
-
-        <button onClick={loadFindings} className="btn btn-outline btn-sm">
+        <button className="btn btn-outline btn-sm" onClick={load}>
           <RefreshCw size={14} />
           <span>Refresh</span>
         </button>
       </div>
 
-      {/* Filter & Search Bar */}
-      <div className="card" style={{ marginBottom: '1.5rem', padding: '1rem' }}>
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Search Input */}
-          <div style={{ flex: '1 1 280px', position: 'relative' }}>
-            <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)' }} />
+      {error && <div className="error-banner">{error}</div>}
+
+      <div className="card" style={{ marginBottom: '1.25rem', padding: '1rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ flex: '1 1 260px', position: 'relative' }}>
+            <Search
+              size={15}
+              color="var(--text-muted)"
+              style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)' }}
+            />
             <input
               type="text"
               className="form-input"
-              style={{ paddingLeft: '2.25rem' }}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search findings by title, file, endpoint, or explanation..."
+              style={{ paddingLeft: '2rem' }}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search title, file, endpoint or explanation…"
             />
           </div>
 
-          {/* Severity Filter */}
-          <div style={{ width: '160px' }}>
-            <select
-              className="form-select"
-              value={selectedSeverity}
-              onChange={(e) => setSelectedSeverity(e.target.value)}
-            >
-              <option value="">All Severities</option>
-              <option value="CRITICAL">Critical</option>
-              <option value="HIGH">High</option>
-              <option value="MEDIUM">Medium</option>
-              <option value="LOW">Low</option>
-              <option value="INFO">Informational</option>
-            </select>
-          </div>
+          <select className="form-select" style={{ width: 150 }} value={severity} onChange={(e) => setSeverity(e.target.value)}>
+            <option value="">All severities</option>
+            {SEVERITIES.map((s) => (
+              <option key={s} value={s}>
+                {s.charAt(0) + s.slice(1).toLowerCase()}
+              </option>
+            ))}
+          </select>
 
-          {/* Status Filter */}
-          <div style={{ width: '170px' }}>
-            <select
-              className="form-select"
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-            >
-              <option value="">All Statuses</option>
-              <option value="VERIFIED">Verified</option>
-              <option value="NEEDS_REVIEW">Needs Review</option>
-              <option value="POTENTIAL">Potential</option>
-              <option value="FALSE_POSITIVE">False Positive</option>
-              <option value="INFORMATIONAL">Informational</option>
-            </select>
-          </div>
+          <select className="form-select" style={{ width: 165 }} value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="">All statuses</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s.replace(/_/g, ' ').toLowerCase()}
+              </option>
+            ))}
+          </select>
+
+          <select className="form-select" style={{ width: 185 }} value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="">All categories</option>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c.replace(/_/g, ' ').toLowerCase()}
+              </option>
+            ))}
+          </select>
         </div>
+        {hasFilters && (
+          <p className="muted" style={{ fontSize: '0.75rem', marginTop: '0.6rem' }}>
+            {loading ? 'Loading…' : `${filtered.length} of ${findings.length} findings match`}
+          </p>
+        )}
       </div>
 
-      {/* Findings Grid */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-          Loading findings catalog...
-        </div>
-      ) : filtered.length > 0 ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.25rem' }}>
+        <div className="empty-state">Loading findings…</div>
+      ) : filtered.length ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: '1.25rem' }}>
           {filtered.map((f) => (
-            <FindingCard
-              key={f.id}
-              finding={f}
-              onViewDetails={(finding) => setSelectedFinding(finding)}
-            />
+            <FindingCard key={f.id} finding={f} onViewDetails={setSelected} />
           ))}
         </div>
       ) : (
-        <div className="card" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
-          <CheckCircle2 size={36} color="#16a34a" style={{ margin: '0 auto 0.75rem' }} />
-          <h3 style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-main)' }}>
-            No Findings Match Filters
+        <div className="card empty-state">
+          <CheckCircle2 size={32} color="#16a34a" style={{ margin: '0 auto 0.6rem' }} />
+          <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-main)' }}>
+            {hasFilters ? 'Nothing matches these filters' : 'No findings recorded'}
           </h3>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            Adjust your search query or run a new security assessment.
+          <p style={{ fontSize: '0.84rem', marginTop: '0.2rem' }}>
+            {hasFilters ? 'Try widening the filters.' : 'Run an assessment to populate the catalog.'}
           </p>
         </div>
       )}
 
-      {/* Finding Details Modal */}
-      {selectedFinding && (
-        <FindingModal
-          finding={selectedFinding}
-          onClose={() => setSelectedFinding(null)}
-          onStatusUpdated={loadFindings}
-        />
+      {selected && (
+        <FindingModal finding={selected} onClose={() => setSelected(null)} onStatusUpdated={load} />
       )}
     </div>
   );

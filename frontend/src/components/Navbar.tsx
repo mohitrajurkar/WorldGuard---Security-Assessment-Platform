@@ -1,56 +1,71 @@
 import React, { useEffect, useState } from 'react';
-import { Shield, LayoutDashboard, History, AlertTriangle, Terminal, Globe, FileText } from 'lucide-react';
+import { Shield, LayoutDashboard, History, AlertTriangle, FileText, Terminal } from 'lucide-react';
 import { api, ScannersStatusResponse } from '../services/api';
 
-interface NavbarProps {
-  currentTab: string;
-  onSelectTab: (tab: string) => void;
-}
+const NAV_ITEMS = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'scans', label: 'Assessments', icon: History },
+  { id: 'findings', label: 'Findings', icon: AlertTriangle },
+  { id: 'reports', label: 'Reports', icon: FileText },
+  { id: 'api-tester', label: 'API Probe', icon: Terminal },
+];
 
-export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
-  const [scannerStatus, setScannerStatus] = useState<ScannersStatusResponse | null>(null);
+export const Navbar: React.FC<{ currentTab: string; onSelectTab: (tab: string) => void }> = ({
+  currentTab,
+  onSelectTab,
+}) => {
+  const [status, setStatus] = useState<ScannersStatusResponse | null>(null);
 
   useEffect(() => {
-    const fetchStatus = () => {
-      api.getScannerStatus()
-        .then(setScannerStatus)
-        .catch(() => {});
+    let alive = true;
+    const load = () => {
+      api
+        .getScannerStatus()
+        .then((s) => alive && setStatus(s))
+        .catch(() => {
+          /* the backend may still be starting; the strip just stays neutral */
+        });
     };
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 30000);
-    return () => clearInterval(interval);
+    load();
+    const timer = window.setInterval(load, 30_000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
   }, []);
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'scans', label: 'Scans', icon: History },
-    { id: 'findings', label: 'Findings', icon: AlertTriangle },
-    { id: 'api-scan', label: 'API Scan', icon: Terminal },
-    { id: 'external-intel', label: 'External Intelligence', icon: Globe },
-    { id: 'reports', label: 'Reports', icon: FileText },
+  // Only report engines that a scan can actually be routed to.
+  const engines = [
+    { key: 'static', label: 'Static', engine: status?.static },
+    { key: 'dynamic', label: 'Dynamic', engine: status?.dynamic },
+    { key: 'apiProbe', label: 'API Probe', engine: status?.apiProbe },
   ];
 
   return (
     <header className="navbar">
       <div className="navbar-inner">
-        <div className="nav-brand" style={{ cursor: 'pointer' }} onClick={() => onSelectTab('dashboard')}>
-          <Shield size={24} />
-          <span>WorldGuard</span>
+        <div className="nav-brand" onClick={() => onSelectTab('dashboard')} style={{ cursor: 'pointer' }}>
+          <Shield size={22} />
+          <span>
+            WorldGuard
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>
+              SIH26163
+            </span>
+          </span>
         </div>
 
         <nav className="nav-links">
-          {navItems.map((item) => {
+          {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
-            const isActive = currentTab === item.id;
             return (
               <button
                 key={item.id}
+                className={`nav-link ${currentTab === item.id ? 'active' : ''}`}
                 onClick={() => onSelectTab(item.id)}
-                className={`nav-link ${isActive ? 'active' : ''}`}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem' }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
               >
-                <Icon size={16} />
-                <span>{item.label}</span>
+                <Icon size={15} />
+                {item.label}
               </button>
             );
           })}
@@ -59,27 +74,26 @@ export const Navbar: React.FC<NavbarProps> = ({ currentTab, onSelectTab }) => {
 
       <div className="scanner-status-strip">
         <div className="status-strip-inner">
-          <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>Scanner Engine Status:</span>
-          
-          <div className="tool-indicator">
-            <span className={`status-dot ${scannerStatus?.semgrep?.available ? 'connected' : 'unavailable'}`} />
-            <span>Semgrep (Source): <strong>{scannerStatus?.semgrep?.available ? 'Connected' : 'Unavailable'}</strong></span>
+          <span style={{ color: 'var(--text-muted)' }}>Engines</span>
+          <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
+            {engines.map(({ key, label, engine }) => {
+              const up = Boolean(engine?.available);
+              return (
+                <span key={key} className="tool-indicator" title={engine?.label ?? 'Not reported'}>
+                  <span className={`status-dot ${up ? 'connected' : 'unavailable'}`} />
+                  <span style={{ color: 'var(--text-muted)' }}>{label}:</span>
+                  <strong style={{ color: up ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                    {status === null ? 'checking…' : up ? (engine?.version ?? 'Ready') : 'unavailable'}
+                  </strong>
+                </span>
+              );
+            })}
           </div>
-
-          <div className="tool-indicator">
-            <span className={`status-dot ${scannerStatus?.zap?.available ? 'connected' : 'unavailable'}`} />
-            <span>OWASP ZAP (Dynamic): <strong>{scannerStatus?.zap?.available ? 'Connected' : 'Unavailable'}</strong></span>
-          </div>
-
-          <div className="tool-indicator">
-            <span className="status-dot connected" />
-            <span>API Scanner: <strong>Ready</strong></span>
-          </div>
-
-          <div className="tool-indicator">
-            <span className={`status-dot ${scannerStatus?.leakix?.available ? 'connected' : 'unavailable'}`} />
-            <span>LeakIX (OSINT): <strong>{scannerStatus?.leakix?.available ? 'Connected' : 'Unavailable'}</strong></span>
-          </div>
+          {status?.static?.repository && (
+            <span className="mono muted" style={{ fontSize: '0.7rem' }}>
+              {status.static.repository}
+            </span>
+          )}
         </div>
       </div>
     </header>

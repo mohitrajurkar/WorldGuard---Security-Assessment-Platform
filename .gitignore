@@ -1,0 +1,20 @@
+# ── Java / Maven ───────────────────────────────────────────────
+backend/target/
+*.class
+
+# ── Node ───────────────────────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# ── Runtime data & generated artefacts ─────────────────────────
+backend/data/
+backend/reports/
+*.log
+
+# ── Editors / OS ───────────────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db

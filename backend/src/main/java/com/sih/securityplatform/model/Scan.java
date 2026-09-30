@@ -16,14 +16,22 @@ public class Scan {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private ScanType scanType = ScanType.COMPLETE;
+    private ScanType scanType = ScanType.DAST;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ScanStatus status = ScanStatus.PENDING;
 
-    private String targetUrl = "http://localhost:3000";
+    private String targetUrl = "https://worldmonitor.app";
     private String sourcePath;
+
+    // External Scanner Integration Fields (Pentest Suite)
+    private String externalScanner = "PENTEST_SUITE";
+    private String externalScanId;
+    private String rawResultLocation;
+    private String rawResultFormat = "JSON";
+    private String profile = "STANDARD";
+    private boolean authorizedAssessment = true;
 
     private LocalDateTime startedAt;
     private LocalDateTime completedAt;
@@ -44,6 +52,12 @@ public class Scan {
     private String currentStep;
 
     private boolean isDemo;
+
+    // Error tracking
+    private String errorCode;
+    @Column(columnDefinition = "TEXT")
+    private String errorMessage;
+    private LocalDateTime errorTimestamp;
 
     @OneToMany(mappedBy = "scan", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     @JsonManagedReference
@@ -83,12 +97,76 @@ public class Scan {
         this.targetUrl = targetUrl;
     }
 
+    public String getTarget() {
+        return targetUrl;
+    }
+
+    public void setTarget(String target) {
+        this.targetUrl = target;
+    }
+
     public String getSourcePath() {
         return sourcePath;
     }
 
     public void setSourcePath(String sourcePath) {
         this.sourcePath = sourcePath;
+    }
+
+    public String getExternalScanner() {
+        return externalScanner;
+    }
+
+    public void setExternalScanner(String externalScanner) {
+        this.externalScanner = externalScanner;
+    }
+
+    public String getExternalScanId() {
+        return externalScanId;
+    }
+
+    public void setExternalScanId(String externalScanId) {
+        this.externalScanId = externalScanId;
+    }
+
+    public String getRawResultLocation() {
+        return rawResultLocation;
+    }
+
+    public void setRawResultLocation(String rawResultLocation) {
+        this.rawResultLocation = rawResultLocation;
+    }
+
+    public String getRawResultReference() {
+        return rawResultLocation;
+    }
+
+    public void setRawResultReference(String rawResultReference) {
+        this.rawResultLocation = rawResultReference;
+    }
+
+    public String getRawResultFormat() {
+        return rawResultFormat;
+    }
+
+    public void setRawResultFormat(String rawResultFormat) {
+        this.rawResultFormat = rawResultFormat;
+    }
+
+    public String getProfile() {
+        return profile;
+    }
+
+    public void setProfile(String profile) {
+        this.profile = profile;
+    }
+
+    public boolean isAuthorizedAssessment() {
+        return authorizedAssessment;
+    }
+
+    public void setAuthorizedAssessment(boolean authorizedAssessment) {
+        this.authorizedAssessment = authorizedAssessment;
     }
 
     public LocalDateTime getStartedAt() {
@@ -211,6 +289,30 @@ public class Scan {
         isDemo = demo;
     }
 
+    public String getErrorCode() {
+        return errorCode;
+    }
+
+    public void setErrorCode(String errorCode) {
+        this.errorCode = errorCode;
+    }
+
+    public String getErrorMessage() {
+        return errorMessage;
+    }
+
+    public void setErrorMessage(String errorMessage) {
+        this.errorMessage = errorMessage;
+    }
+
+    public LocalDateTime getErrorTimestamp() {
+        return errorTimestamp;
+    }
+
+    public void setErrorTimestamp(LocalDateTime errorTimestamp) {
+        this.errorTimestamp = errorTimestamp;
+    }
+
     public List<Finding> getFindings() {
         return findings;
     }
@@ -220,7 +322,7 @@ public class Scan {
     }
 
     public void addFinding(Finding finding) {
-        findings.add(finding);
+        this.findings.add(finding);
         finding.setScan(this);
     }
 }

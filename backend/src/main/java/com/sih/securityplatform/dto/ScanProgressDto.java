@@ -68,4 +68,12 @@ public class ScanProgressDto {
     public void setCurrentScore(Integer currentScore) {
         this.currentScore = currentScore;
     }
+
+    public Integer getSecurityScore() {
+        return currentScore;
+    }
+
+    public void setSecurityScore(Integer securityScore) {
+        this.currentScore = securityScore;
+    }
 }

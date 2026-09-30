@@ -2,6 +2,7 @@ package com.sih.securityplatform.controller;
 
 import com.sih.securityplatform.model.Finding;
 import com.sih.securityplatform.model.FindingCategory;
+import com.sih.securityplatform.model.FindingStatus;
 import com.sih.securityplatform.model.Severity;
 import com.sih.securityplatform.repository.FindingRepository;
 import org.springframework.http.ResponseEntity;
@@ -26,21 +27,14 @@ public class FindingController {
             @RequestParam(required = false) Long scanId,
             @RequestParam(required = false) Severity severity,
             @RequestParam(required = false) FindingCategory category,
-            @RequestParam(required = false) String status) {
+            @RequestParam(required = false) FindingStatus status) {
 
-        if (scanId != null) {
-            return findingRepository.findByScanId(scanId);
+        // Every supplied filter is applied together. Previously the controller returned on the
+        // first non-null filter, so a combined severity+status query silently ignored `status`.
+        if (scanId == null && severity == null && category == null && status == null) {
+            return findingRepository.findAll();
         }
-        if (severity != null) {
-            return findingRepository.findBySeverity(severity);
-        }
-        if (category != null) {
-            return findingRepository.findByCategory(category);
-        }
-        if (status != null) {
-            return findingRepository.findByStatus(status);
-        }
-        return findingRepository.findAll();
+        return findingRepository.findFiltered(scanId, severity, category, status);
     }
 
     @GetMapping("/{id}")
@@ -54,13 +48,20 @@ public class FindingController {
     public ResponseEntity<Finding> updateFindingStatus(
             @PathVariable Long id,
             @RequestBody Map<String, String> body) {
-        return findingRepository.findById(id).map(finding -> {
-            String newStatus = body.get("status");
-            if (newStatus != null) {
-                finding.setStatus(newStatus.toUpperCase());
-                findingRepository.save(finding);
-            }
-            return ResponseEntity.ok(finding);
-        }).orElse(ResponseEntity.notFound().build());
+        Finding finding = findingRepository.findById(id).orElse(null);
+        if (finding == null) {
+            return ResponseEntity.notFound().build();
+        }
+        String raw = body.get("status");
+        if (raw == null || raw.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        try {
+            finding.setStatus(FindingStatus.valueOf(raw.trim().toUpperCase()));
+        } catch (IllegalArgumentException e) {
+            // An unknown triage state is a client error, not a server error.
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(findingRepository.save(finding));
     }
 }

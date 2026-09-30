@@ -12,14 +12,24 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+    open-in-view: false
     show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+pentest:
+  suite:
+    base-url: ${PENTEST_SUITE_BASE_URL:http://localhost:8888}
+    api-key: ${PENTEST_SUITE_API_KEY:}
+    timeout: ${PENTEST_SUITE_TIMEOUT:30000}
+    poll-interval-ms: 1500
+    # Seed budget for a STANDARD dynamic scan. Deep/Full scale from this, and every real
+    # measurement replaces it, so the estimate shown in the UI tracks reality.
+    max-scan-duration-ms: 360000
 
 security:
   platform:
-    default-target: "https://worldmonitor.app"
-    semgrep-rules-path: "../scanner/semgrep/worldmonitor-rules.yaml"
-    zap-config-path: "../scanner/zap/scan-config.yaml"
+    default-target: ${DEFAULT_TARGET:https://worldmonitor.app}
+    # Optional local Semgrep rule pack. Falls back to `semgrep --config auto` when absent.
+    semgrep-rules-path: "../scanner/static-test/semgrep/worldmonitor-rules.yaml"
     reports-dir: "./reports"
+    raw-results-dir: "./data/raw_scans"
+    allow-localhost-testing: ${ALLOW_LOCALHOST_TESTING:true}

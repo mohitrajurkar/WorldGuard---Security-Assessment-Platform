@@ -1,9 +1,5 @@
 @echo off
-echo ============================================================
-echo Starting SIH26163 Security Platform Frontend (Vite + React)
-echo ============================================================
-
-set "PATH=C:\Program Files\nodejs;%PATH%"
-
+setlocal
 cd /d "%~dp0..\frontend"
-npm run dev
+if not exist "node_modules" call npm install
+call npm run dev

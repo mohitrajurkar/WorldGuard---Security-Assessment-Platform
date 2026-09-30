@@ -29,10 +29,16 @@ public class Finding {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private FindingStatus status = FindingStatus.POTENTIAL;
+    private FindingStatus status = FindingStatus.NEEDS_REVIEW;
 
-    private String source; // "Semgrep", "OWASP ZAP", "API Scanner", "LeakIX"
+    private String source = "PENTEST_SUITE";
+    private String scanner = "PENTEST_SUITE";
+    private String externalFindingId;
+
+    private String target;
     private String endpoint;
+    private String method = "GET";
+    private String parameter;
     private String filePath;
     private Integer lineNumber;
 
@@ -58,10 +64,24 @@ public class Finding {
     private String reproductionSteps;
 
     @Column(columnDefinition = "TEXT")
+    private String poc; // Proof of Concept: Request, Response, Payload, Observed Result
+
+    @Column(columnDefinition = "TEXT")
+    private String httpRequest;
+
+    @Column(columnDefinition = "TEXT")
+    private String httpResponse;
+
+    @Column(columnDefinition = "TEXT")
     private String rawTechnicalDetails;
 
+    @Column(columnDefinition = "TEXT")
+    private String rawFinding;
+
     private String cwe;
+    private String owaspCategory;
     private Double cvssScore;
+    private String cvssVector;
     private String fingerprint;
     private Integer remediationTimeMinutes = 30;
 
@@ -119,16 +139,6 @@ public class Finding {
         this.status = status;
     }
 
-    public void setStatus(String statusStr) {
-        if (statusStr != null) {
-            try {
-                this.status = FindingStatus.valueOf(statusStr.toUpperCase());
-            } catch (IllegalArgumentException e) {
-                this.status = FindingStatus.NEEDS_REVIEW;
-            }
-        }
-    }
-
     public String getSource() {
         return source;
     }
@@ -137,12 +147,60 @@ public class Finding {
         this.source = source;
     }
 
+    public String getScanner() {
+        return scanner;
+    }
+
+    public void setScanner(String scanner) {
+        this.scanner = scanner;
+    }
+
+    public String getExternalFindingId() {
+        return externalFindingId;
+    }
+
+    public void setExternalFindingId(String externalFindingId) {
+        this.externalFindingId = externalFindingId;
+    }
+
+    public String getScannerFindingId() {
+        return externalFindingId;
+    }
+
+    public void setScannerFindingId(String scannerFindingId) {
+        this.externalFindingId = scannerFindingId;
+    }
+
+    public String getTarget() {
+        return target;
+    }
+
+    public void setTarget(String target) {
+        this.target = target;
+    }
+
     public String getEndpoint() {
         return endpoint;
     }
 
     public void setEndpoint(String endpoint) {
         this.endpoint = endpoint;
+    }
+
+    public String getMethod() {
+        return method;
+    }
+
+    public void setMethod(String method) {
+        this.method = method;
+    }
+
+    public String getParameter() {
+        return parameter;
+    }
+
+    public void setParameter(String parameter) {
+        this.parameter = parameter;
     }
 
     public String getFilePath() {
@@ -161,21 +219,8 @@ public class Finding {
         this.lineNumber = lineNumber;
     }
 
-    public String getAffectedComponent() {
-        if (endpoint != null && !endpoint.isBlank()) {
-            return endpoint;
-        }
-        if (filePath != null && !filePath.isBlank()) {
-            return lineNumber != null ? filePath + ":" + lineNumber : filePath;
-        }
-        return "Application Core";
-    }
-
     public String getWhatIsTheIssue() {
-        if (whatIsTheIssue != null && !whatIsTheIssue.isBlank()) {
-            return whatIsTheIssue;
-        }
-        return description;
+        return whatIsTheIssue;
     }
 
     public void setWhatIsTheIssue(String whatIsTheIssue) {
@@ -183,10 +228,7 @@ public class Finding {
     }
 
     public String getWhyDoesItMatter() {
-        if (whyDoesItMatter != null && !whyDoesItMatter.isBlank()) {
-            return whyDoesItMatter;
-        }
-        return impact;
+        return whyDoesItMatter;
     }
 
     public void setWhyDoesItMatter(String whyDoesItMatter) {
@@ -233,12 +275,44 @@ public class Finding {
         this.reproductionSteps = reproductionSteps;
     }
 
+    public String getPoc() {
+        return poc;
+    }
+
+    public void setPoc(String poc) {
+        this.poc = poc;
+    }
+
+    public String getHttpRequest() {
+        return httpRequest;
+    }
+
+    public void setHttpRequest(String httpRequest) {
+        this.httpRequest = httpRequest;
+    }
+
+    public String getHttpResponse() {
+        return httpResponse;
+    }
+
+    public void setHttpResponse(String httpResponse) {
+        this.httpResponse = httpResponse;
+    }
+
     public String getRawTechnicalDetails() {
         return rawTechnicalDetails;
     }
 
     public void setRawTechnicalDetails(String rawTechnicalDetails) {
         this.rawTechnicalDetails = rawTechnicalDetails;
+    }
+
+    public String getRawFinding() {
+        return rawFinding;
+    }
+
+    public void setRawFinding(String rawFinding) {
+        this.rawFinding = rawFinding;
     }
 
     public String getCwe() {
@@ -249,12 +323,28 @@ public class Finding {
         this.cwe = cwe;
     }
 
+    public String getOwaspCategory() {
+        return owaspCategory;
+    }
+
+    public void setOwaspCategory(String owaspCategory) {
+        this.owaspCategory = owaspCategory;
+    }
+
     public Double getCvssScore() {
         return cvssScore;
     }
 
     public void setCvssScore(Double cvssScore) {
         this.cvssScore = cvssScore;
+    }
+
+    public String getCvssVector() {
+        return cvssVector;
+    }
+
+    public void setCvssVector(String cvssVector) {
+        this.cvssVector = cvssVector;
     }
 
     public String getFingerprint() {

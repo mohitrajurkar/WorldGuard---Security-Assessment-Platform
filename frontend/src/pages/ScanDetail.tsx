@@ -1,301 +1,323 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowLeft, Download, RefreshCw, AlertTriangle, Trash2, Clock, Cpu } from 'lucide-react';
 import { api, Scan, Finding } from '../services/api';
+import { SecurityGauge } from '../components/SecurityGauge';
 import { FindingCard } from '../components/FindingCard';
 import { FindingModal } from '../components/FindingModal';
-import { ArrowLeft, Download, RefreshCw, CheckCircle2, Clock, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 interface Props {
   scanId: number;
   onNavigate: (tab: string) => void;
+  onDeleted: () => void;
 }
 
-export const ScanDetail: React.FC<Props> = ({ scanId, onNavigate }) => {
+/** Phases mirror the backend pipeline so the bar always reflects real work. */
+const PHASES = [
+  { key: 'static', label: 'Static source analysis', from: 0, to: 58 },
+  { key: 'api', label: 'API probe', from: 58, to: 74 },
+  { key: 'dynamic', label: 'Dynamic penetration test', from: 74, to: 98 },
+  { key: 'report', label: 'Scoring & report', from: 98, to: 100 },
+];
+
+const PHASE_NAME: Record<string, string> = {
+  SAST: 'Static source analysis',
+  DAST: 'Dynamic penetration test',
+  API_SECURITY: 'API probe',
+  COMPLETE: 'Complete assessment',
+};
+
+export const ScanDetail: React.FC<Props> = ({ scanId, onNavigate, onDeleted }) => {
   const [scan, setScan] = useState<Scan | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedFinding, setSelectedFinding] = useState<Finding | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Finding | null>(null);
+  const [events, setEvents] = useState<string[]>([]);
+  const seenSteps = useRef<Set<string>>(new Set());
 
-  const fetchScan = async () => {
+  const fetchScan = useCallback(async () => {
     try {
-      const data = await api.getScan(scanId);
-      setScan(data);
-    } catch (err) {
-      console.error(err);
+      setError(null);
+      setScan(await api.getScan(scanId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load this assessment');
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchScan();
-
-    const eventSource = new EventSource(`/api/scans/${scanId}/progress`);
-
-    eventSource.addEventListener('progress', (e) => {
-      try {
-        const payload = JSON.parse(e.data);
-        setScan((prev) => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            status: payload.status,
-            progressPercent: payload.progressPercent,
-            currentStep: payload.currentStep,
-            securityScore: payload.currentScore !== null ? payload.currentScore : prev.securityScore
-          };
-        });
-
-        if (payload.status === 'COMPLETED' || payload.status === 'FAILED') {
-          eventSource.close();
-          fetchScan();
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    });
-
-    return () => {
-      eventSource.close();
-    };
   }, [scanId]);
 
-  if (loading && !scan) {
-    return (
-      <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-muted)' }}>
-        Loading assessment details...
-      </div>
-    );
-  }
+  useEffect(() => {
+    setLoading(true);
+    setEvents([]);
+    seenSteps.current.clear();
+    fetchScan();
+
+    const source = new EventSource(`/api/scans/${scanId}/stream`);
+    source.addEventListener('progress', (e) => {
+      try {
+        const p = JSON.parse((e as MessageEvent).data);
+        setScan((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: p.status,
+                progressPercent: p.progressPercent,
+                currentStep: p.currentStep,
+                securityScore: p.currentScore ?? prev.securityScore,
+              }
+            : prev,
+        );
+        if (p.currentStep && !seenSteps.current.has(p.currentStep)) {
+          seenSteps.current.add(p.currentStep);
+          setEvents((prev) => [...prev.slice(-60), p.currentStep]);
+        }
+        if (p.status === 'COMPLETED' || p.status === 'FAILED') {
+          source.close();
+          fetchScan();
+        }
+      } catch {
+        /* ignore malformed frames */
+      }
+    });
+    source.onerror = () => source.close();
+
+    return () => source.close();
+  }, [scanId, fetchScan]);
+
+  const remove = async () => {
+    if (!window.confirm(`Delete assessment #${scanId}?`)) return;
+    try {
+      await api.deleteScan(scanId);
+      onDeleted();
+      onNavigate('scans');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete this assessment');
+    }
+  };
+
+  if (loading && !scan) return <div className="empty-state">Loading assessment…</div>;
 
   if (!scan) {
     return (
-      <div style={{ textAlign: 'center', padding: '4rem 1rem' }}>
-        <p style={{ color: 'var(--crit-color)', marginBottom: '1rem' }}>Assessment not found.</p>
-        <button onClick={() => onNavigate('scans')} className="btn btn-outline">
-          Back to Scans
+      <div className="empty-state">
+        <p style={{ color: 'var(--crit-color)', marginBottom: '1rem' }}>Assessment #{scanId} was not found.</p>
+        <button className="btn btn-outline" onClick={() => onNavigate('scans')}>
+          Back to assessments
         </button>
       </div>
     );
   }
 
-  const isRunning = scan.status === 'RUNNING' || scan.status === 'PENDING';
+  const running = scan.status === 'RUNNING' || scan.status === 'PENDING';
+  const failed = scan.status === 'FAILED';
+  const findings = scan.findings ?? [];
+  const total = scan.criticalCount + scan.highCount + scan.mediumCount + scan.lowCount;
 
-  // Calculate tool breakdown counts
-  const findings = scan.findings || [];
-  const semgrepCount = findings.filter(f => f.source.includes('Semgrep')).length;
-  const zapCount = findings.filter(f => f.source.includes('ZAP')).length;
-  const apiCount = findings.filter(f => f.source.includes('API')).length;
-  const leakCount = findings.filter(f => f.source.includes('LeakIX')).length;
+  const duration =
+    scan.completedAt && scan.startedAt
+      ? Math.max(1, Math.round((new Date(scan.completedAt).getTime() - new Date(scan.startedAt).getTime()) / 1000))
+      : null;
 
-  const durationSec = scan.completedAt && scan.startedAt
-    ? Math.max(1, Math.round((new Date(scan.completedAt).getTime() - new Date(scan.startedAt).getTime()) / 1000))
-    : null;
+  // Only show the phases this scan type actually runs.
+  const phases = PHASES.filter((p) => {
+    if (p.key === 'static') return scan.scanType === 'SAST' || scan.scanType === 'COMPLETE';
+    if (p.key === 'api') return scan.scanType === 'API_SECURITY' || scan.scanType === 'COMPLETE';
+    if (p.key === 'dynamic') return scan.scanType === 'DAST' || scan.scanType === 'COMPLETE';
+    return true;
+  });
 
-  // Timeline steps
-  const timelineSteps = [
-    { title: 'Target Validation', percent: 10 },
-    { title: 'Source Analysis (Semgrep)', percent: 25 },
-    { title: 'API Security Testing', percent: 45 },
-    { title: 'Dynamic Web Testing (ZAP)', percent: 65 },
-    { title: 'External Intelligence (LeakIX)', percent: 80 },
-    { title: 'Finding Analysis & Correlation', percent: 90 },
-    { title: 'Report Generation', percent: 98 },
-  ];
+  const activeIndex = running
+    ? phases.findIndex((p) => scan.progressPercent < p.to)
+    : phases.length;
 
   return (
     <div>
-      {/* Top Bar */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+      {error && <div className="error-banner">{error}</div>}
+
+      <div className="spread" style={{ marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <button onClick={() => onNavigate('scans')} className="btn btn-outline btn-sm">
-            <ArrowLeft size={16} />
-            <span>All Assessments</span>
+          <button className="btn btn-outline btn-sm" onClick={() => onNavigate('scans')}>
+            <ArrowLeft size={15} />
+            <span>All</span>
           </button>
           <div>
-            <h1 style={{ fontSize: '1.35rem', fontWeight: 700, color: 'var(--text-main)' }}>
-              Security Assessment #{scan.id}
+            <h1 style={{ fontSize: '1.3rem', fontWeight: 700, margin: 0 }}>
+              {PHASE_NAME[scan.scanType] ?? scan.scanType} #{scan.id}
             </h1>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              Target: <code>{scan.targetUrl}</code>
+            <span className="mono muted" style={{ fontSize: '0.78rem' }}>
+              {scan.targetUrl}
             </span>
           </div>
         </div>
 
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button onClick={fetchScan} className="btn btn-outline btn-sm">
+          <button className="btn btn-outline btn-sm" onClick={fetchScan} title="Refresh" aria-label="Refresh">
             <RefreshCw size={14} />
           </button>
+          <button className="btn btn-outline btn-sm" onClick={remove} title="Delete" aria-label="Delete">
+            <Trash2 size={14} color="var(--crit-color)" />
+          </button>
           {scan.status === 'COMPLETED' && (
-            <a
-              href={api.getReportDownloadUrl(scan.id)}
-              target="_blank"
-              rel="noreferrer"
-              className="btn btn-primary btn-sm"
-            >
+            <a href={api.getReportDownloadUrl(scan.id)} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm">
               <Download size={14} />
-              <span>Download PDF Report</span>
+              <span>Download report</span>
             </a>
           )}
         </div>
       </div>
 
-      {/* Execution Progress State */}
-      {isRunning ? (
-        <div className="card" style={{ marginBottom: '2rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-            <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)' }}>
-              Status: {scan.currentStep || 'Assessing target...'}
-            </span>
-            <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary-blue)' }}>
-              {scan.progressPercent}%
-            </span>
-          </div>
-
-          <div style={{ width: '100%', height: '8px', background: 'var(--bg-subtle)', borderRadius: '4px', overflow: 'hidden', marginBottom: '1.5rem' }}>
-            <div
-              style={{
-                width: `${scan.progressPercent}%`,
-                height: '100%',
-                background: 'var(--primary-blue)',
-                transition: 'width 0.3s ease'
-              }}
-            />
-          </div>
-
-          {/* Clean Progress Timeline */}
-          <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
-              Assessment Timeline
-            </div>
-            {timelineSteps.map((s, idx) => {
-              const isDone = scan.progressPercent > s.percent;
-              const isActive = scan.progressPercent >= s.percent - 10 && scan.progressPercent <= s.percent;
-              return (
-                <div key={idx} className="timeline-item">
-                  <div className={`timeline-icon ${isDone ? 'done' : isActive ? 'active' : 'pending'}`}>
-                    {isDone ? '✓' : isActive ? '●' : '○'}
-                  </div>
-                  <span style={{ color: isDone ? 'var(--text-main)' : isActive ? 'var(--primary-blue)' : 'var(--text-muted)', fontWeight: isActive ? 600 : 400 }}>
-                    {s.title}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        /* Completed Scan Summary Layout (Requirement 12) */
-        <div>
-          {/* Summary Box */}
-          <div className="card" style={{ marginBottom: '1.75rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
-              {/* Target & Mode */}
-              <div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                  Target Application
-                </span>
-                <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)', marginTop: '0.2rem' }}>
-                  World Monitor — Local
-                </div>
-                <code style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  {scan.targetUrl}
-                </code>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-                  Scan: <strong>{scan.scanType}</strong> {durationSec ? `(${durationSec}s)` : ''}
-                </div>
-              </div>
-
-              {/* Security Score */}
-              <div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                  Security Score
-                </span>
-                <div style={{ fontSize: '2.25rem', fontWeight: 800, color: scan.securityScore >= 80 ? '#16a34a' : scan.securityScore >= 60 ? '#d97706' : '#dc2626', marginTop: '0.1rem' }}>
-                  {scan.securityScore} <span style={{ fontSize: '1.1rem', fontWeight: 500, color: 'var(--text-muted)' }}>/ 100</span>
-                </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  {scan.securityScore >= 80 ? 'Good Security Posture' : 'Review Required'}
-                </div>
-              </div>
-
-              {/* Finding Breakdown */}
-              <div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                  Findings Classification
-                </span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.35rem', fontSize: '0.85rem' }}>
-                  <div><strong>{scan.verifiedCount}</strong> Verified</div>
-                  <div><strong>{scan.needsReviewCount}</strong> Needs Review</div>
-                  <div><strong>{scan.potentialCount}</strong> Potential</div>
-                  <div><strong>{scan.informationalCount}</strong> Informational</div>
-                </div>
-              </div>
-
-              {/* Scanner Sources */}
-              <div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                  Evidence Sources
-                </span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.35rem', fontSize: '0.85rem' }}>
-                  <div>Semgrep (Source): <strong>{semgrepCount}</strong></div>
-                  <div>OWASP ZAP: <strong>{zapCount}</strong></div>
-                  <div>API Scanner: <strong>{apiCount}</strong></div>
-                  <div>LeakIX (OSINT): <strong>{leakCount}</strong></div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Zero Results Messages if Applicable (Requirement 24) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '0.75rem', marginBottom: '1.5rem' }}>
-            <div style={{ background: 'var(--bg-subtle)', padding: '0.6rem 0.9rem', borderRadius: '6px', fontSize: '0.8rem', border: '1px solid var(--border-color)' }}>
-              <strong>Semgrep:</strong> {semgrepCount > 0 ? `${semgrepCount} static pattern(s) identified.` : 'No security findings detected in source.'}
-            </div>
-            <div style={{ background: 'var(--bg-subtle)', padding: '0.6rem 0.9rem', borderRadius: '6px', fontSize: '0.8rem', border: '1px solid var(--border-color)' }}>
-              <strong>OWASP ZAP:</strong> {zapCount > 0 ? `${zapCount} dynamic finding(s) recorded.` : 'No ZAP findings detected (or service offline).'}
-            </div>
-            <div style={{ background: 'var(--bg-subtle)', padding: '0.6rem 0.9rem', borderRadius: '6px', fontSize: '0.8rem', border: '1px solid var(--border-color)' }}>
-              <strong>API Scanner:</strong> {apiCount > 0 ? `${apiCount} observation(s) with request/response evidence.` : 'No issues detected in tested API endpoints.'}
-            </div>
-          </div>
-
-          {/* Findings Catalog */}
-          <div style={{ marginBottom: '2rem' }}>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '1rem' }}>
-              Security Findings ({findings.length})
-            </h2>
-
-            {findings.length > 0 ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1.25rem' }}>
-                {findings.map((f) => (
-                  <FindingCard
-                    key={f.id}
-                    finding={f}
-                    onViewDetails={(finding) => setSelectedFinding(finding)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="card" style={{ textAlign: 'center', padding: '3rem 1rem' }}>
-                <CheckCircle2 size={40} color="#16a34a" style={{ margin: '0 auto 0.75rem' }} />
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                  0 Vulnerabilities Detected
-                </h3>
-                <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                  No security weaknesses or unvalidated responses were observed during this assessment.
-                </p>
-              </div>
-            )}
+      {failed && (
+        <div className="error-banner" style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
+          <AlertTriangle size={17} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <strong>Assessment did not complete cleanly</strong>
+            <div style={{ marginTop: '0.2rem' }}>{scan.errorMessage || 'No further detail was recorded.'}</div>
           </div>
         </div>
       )}
 
-      {/* Finding Details Modal */}
-      {selectedFinding && (
-        <FindingModal
-          finding={selectedFinding}
-          onClose={() => setSelectedFinding(null)}
-          onStatusUpdated={fetchScan}
-        />
+      {scan.status === 'COMPLETED' && scan.errorMessage && (
+        <div className="notice-banner">
+          <strong>Partial result</strong>
+          <div style={{ marginTop: '0.2rem' }}>{scan.errorMessage}</div>
+        </div>
+      )}
+
+      {/* Pipeline */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <div className="spread" style={{ marginBottom: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Cpu size={16} color="var(--primary-blue)" />
+            <strong style={{ fontSize: '0.88rem' }}>Pipeline</strong>
+          </div>
+          <strong style={{ fontSize: '0.9rem', color: failed ? 'var(--crit-color)' : 'var(--primary-blue)' }}>
+            {scan.progressPercent}%
+          </strong>
+        </div>
+
+        <div className={`progress-track ${failed ? '' : ''}`} style={{ marginBottom: '1rem' }}>
+          <div
+            className={`progress-track__fill ${failed ? 'progress-track__fill--failed' : ''}`}
+            style={{ width: `${scan.progressPercent}%` }}
+          />
+        </div>
+
+        <div className="phase-track">
+          {phases.map((p, i) => {
+            const state = !running || i < activeIndex ? 'done' : i === activeIndex ? 'running' : 'pending';
+            return (
+              <div key={p.key} className={`phase phase--${state}`}>
+                <span className="phase__dot" />
+                <span>{p.label}</span>
+                <span className="phase__note">
+                  {state === 'done' ? 'complete' : state === 'running' ? 'in progress' : 'queued'}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {scan.currentStep && (
+          <p className="mono muted" style={{ fontSize: '0.78rem', marginTop: '0.85rem' }}>
+            {scan.currentStep}
+          </p>
+        )}
+      </div>
+
+      {/* Result summary */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 0.9fr) 1.4fr', gap: '1.25rem', marginBottom: '1.5rem' }}>
+        <div className="card">
+          <SecurityGauge score={scan.securityScore} label="Assessment score" />
+          <div className="spread" style={{ marginTop: '1rem', paddingTop: '0.85rem', borderTop: '1px solid var(--border-subtle)' }}>
+            <div>
+              <div className="muted" style={{ fontSize: '0.72rem' }}>Duration</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+                {duration ? `${duration}s` : running ? 'running…' : '—'}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div className="muted" style={{ fontSize: '0.72rem' }}>Profile</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{scan.profile}</div>
+            </div>
+          </div>
+          {scan.externalScanner && (
+            <p className="mono muted" style={{ fontSize: '0.72rem', marginTop: '0.6rem' }}>
+              {scan.externalScanner}
+            </p>
+          )}
+        </div>
+
+        <div className="card">
+          <div
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.05em',
+              color: 'var(--text-muted)',
+              marginBottom: '0.6rem',
+            }}
+          >
+            {total} actionable issue{total === 1 ? '' : 's'}
+          </div>
+          <div className="metric-grid">
+            {[
+              { label: 'Critical', value: scan.criticalCount, color: 'var(--crit-color)' },
+              { label: 'High', value: scan.highCount, color: 'var(--high-color)' },
+              { label: 'Medium', value: scan.mediumCount, color: 'var(--med-color)' },
+              { label: 'Low', value: scan.lowCount, color: 'var(--low-color)' },
+              { label: 'Info', value: scan.infoCount, color: 'var(--info-color)' },
+              { label: 'Verified', value: scan.verifiedCount, color: 'var(--crit-color)' },
+              { label: 'Review', value: scan.needsReviewCount, color: 'var(--review-color)' },
+              { label: 'Potential', value: scan.potentialCount, color: 'var(--potential-color)' },
+            ].map((m) => (
+              <div key={m.label} className="metric-tile">
+                <span className="metric-tile__label">{m.label}</span>
+                <span className="metric-tile__value" style={{ color: m.value > 0 ? m.color : 'var(--text-muted)' }}>
+                  {m.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Live log */}
+      {running && events.length > 0 && (
+        <div className="card" style={{ marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.6rem' }}>
+            <Clock size={15} color="var(--text-muted)" />
+            <strong style={{ fontSize: '0.85rem' }}>Activity</strong>
+          </div>
+          <div style={{ maxHeight: 160, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+            {events.slice(-12).map((e, i) => (
+              <div key={i} className="mono muted" style={{ fontSize: '0.72rem' }}>
+                {e}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Findings */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <h2 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '0.85rem' }}>
+          Findings ({findings.length})
+        </h2>
+        {findings.length === 0 ? (
+          <div className="card empty-state">
+            {running ? 'Scanning…' : 'No issues were recorded for this assessment.'}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {findings.map((f) => (
+              <FindingCard key={f.id} finding={f} onViewDetails={setSelected} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {selected && (
+        <FindingModal finding={selected} onClose={() => setSelected(null)} onStatusUpdated={fetchScan} />
       )}
     </div>
   );
